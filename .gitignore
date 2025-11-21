@@ -1,0 +1,78 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+coverage.txt
+coverage.html
+
+# Go workspace file
+go.work
+
+# Build output
+/bin/
+/dist/
+terraform-mirror
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Config files with secrets
+config.local.hcl
+*.env
+.env.local
+
+# Data directories
+/data/
+*.db
+*.db-shm
+*.db-wal
+
+# Cache
+/cache/
+/var/
+
+# Logs
+*.log
+/logs/
+
+# Node.js / Frontend
+node_modules/
+.npm
+.pnpm-debug.log*
+.yarn-debug.log*
+.yarn-error.log*
+pnpm-debug.log*
+
+# Frontend build output
+web/dist/
+web/.vite/
+
+# Test artifacts
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+
+# Backup files
+*.bak
+*.backup
+
+# Temporary files
+*.tmp
+/tmp/

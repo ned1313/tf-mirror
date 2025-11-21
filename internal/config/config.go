@@ -1,0 +1,200 @@
+package config
+
+import (
+	"time"
+)
+
+// Config represents the complete application configuration
+type Config struct {
+	Server    ServerConfig    `hcl:"server,block"`
+	Storage   StorageConfig   `hcl:"storage,block"`
+	Database  DatabaseConfig  `hcl:"database,block"`
+	Cache     CacheConfig     `hcl:"cache,block"`
+	Features  FeaturesConfig  `hcl:"features,block"`
+	Auth      AuthConfig      `hcl:"auth,block"`
+	Logging   LoggingConfig   `hcl:"logging,block"`
+	Telemetry TelemetryConfig `hcl:"telemetry,block"`
+	Providers ProvidersConfig `hcl:"providers,block"`
+	Quota     QuotaConfig     `hcl:"quota,block"`
+}
+
+// ServerConfig contains HTTP server settings
+type ServerConfig struct {
+	Port           int      `hcl:"port,optional"`
+	TLSEnabled     bool     `hcl:"tls_enabled,optional"`
+	TLSCertPath    string   `hcl:"tls_cert_path,optional"`
+	TLSKeyPath     string   `hcl:"tls_key_path,optional"`
+	BehindProxy    bool     `hcl:"behind_proxy,optional"`
+	TrustedProxies []string `hcl:"trusted_proxies,optional"`
+}
+
+// StorageConfig contains object storage settings
+type StorageConfig struct {
+	Type           string `hcl:"type,optional"`
+	Bucket         string `hcl:"bucket,optional"`
+	Region         string `hcl:"region,optional"`
+	Endpoint       string `hcl:"endpoint,optional"`
+	AccessKey      string `hcl:"access_key,optional"`
+	SecretKey      string `hcl:"secret_key,optional"`
+	ForcePathStyle bool   `hcl:"force_path_style,optional"`
+}
+
+// DatabaseConfig contains database settings
+type DatabaseConfig struct {
+	Path                string `hcl:"path,optional"`
+	BackupEnabled       bool   `hcl:"backup_enabled,optional"`
+	BackupIntervalHours int    `hcl:"backup_interval_hours,optional"`
+	BackupToS3          bool   `hcl:"backup_to_s3,optional"`
+	BackupS3Prefix      string `hcl:"backup_s3_prefix,optional"`
+}
+
+// CacheConfig contains caching settings
+type CacheConfig struct {
+	MemorySizeMB int    `hcl:"memory_size_mb,optional"`
+	DiskPath     string `hcl:"disk_path,optional"`
+	DiskSizeGB   int    `hcl:"disk_size_gb,optional"`
+	TTLSeconds   int    `hcl:"ttl_seconds,optional"`
+}
+
+// FeaturesConfig contains feature flags
+type FeaturesConfig struct {
+	AutoDownloadProviders bool `hcl:"auto_download_providers,optional"`
+	AutoDownloadModules   bool `hcl:"auto_download_modules,optional"`
+	MaxDownloadSizeMB     int  `hcl:"max_download_size_mb,optional"`
+}
+
+// AuthConfig contains authentication settings
+type AuthConfig struct {
+	JWTExpirationHours int `hcl:"jwt_expiration_hours,optional"`
+	BcryptCost         int `hcl:"bcrypt_cost,optional"`
+}
+
+// LoggingConfig contains logging settings
+type LoggingConfig struct {
+	Level    string `hcl:"level,optional"`
+	Format   string `hcl:"format,optional"`
+	Output   string `hcl:"output,optional"`
+	FilePath string `hcl:"file_path,optional"`
+}
+
+// TelemetryConfig contains observability settings
+type TelemetryConfig struct {
+	Enabled       bool   `hcl:"enabled,optional"`
+	OtelEnabled   bool   `hcl:"otel_enabled,optional"`
+	OtelEndpoint  string `hcl:"otel_endpoint,optional"`
+	OtelProtocol  string `hcl:"otel_protocol,optional"`
+	ExportTraces  bool   `hcl:"export_traces,optional"`
+	ExportMetrics bool   `hcl:"export_metrics,optional"`
+}
+
+// ProvidersConfig contains provider-specific settings
+type ProvidersConfig struct {
+	GPGVerificationEnabled      bool   `hcl:"gpg_verification_enabled,optional"`
+	GPGKeyURL                   string `hcl:"gpg_key_url,optional"`
+	DownloadRetryAttempts       int    `hcl:"download_retry_attempts,optional"`
+	DownloadRetryInitialDelayMs int    `hcl:"download_retry_initial_delay_ms,optional"`
+	DownloadTimeoutSeconds      int    `hcl:"download_timeout_seconds,optional"`
+}
+
+// QuotaConfig contains storage quota settings
+type QuotaConfig struct {
+	Enabled                 bool `hcl:"enabled,optional"`
+	MaxStorageGB            int  `hcl:"max_storage_gb,optional"`
+	WarningThresholdPercent int  `hcl:"warning_threshold_percent,optional"`
+}
+
+// DefaultConfig returns a configuration with sensible defaults
+func DefaultConfig() *Config {
+	return &Config{
+		Server: ServerConfig{
+			Port:           8080,
+			TLSEnabled:     false,
+			TLSCertPath:    "",
+			TLSKeyPath:     "",
+			BehindProxy:    false,
+			TrustedProxies: []string{},
+		},
+		Storage: StorageConfig{
+			Type:           "s3",
+			Bucket:         "terraform-mirror",
+			Region:         "us-east-1",
+			Endpoint:       "",
+			AccessKey:      "",
+			SecretKey:      "",
+			ForcePathStyle: false,
+		},
+		Database: DatabaseConfig{
+			Path:                "/data/terraform-mirror.db",
+			BackupEnabled:       false,
+			BackupIntervalHours: 24,
+			BackupToS3:          false,
+			BackupS3Prefix:      "backups/",
+		},
+		Cache: CacheConfig{
+			MemorySizeMB: 256,
+			DiskPath:     "/var/cache/tf-mirror",
+			DiskSizeGB:   10,
+			TTLSeconds:   3600,
+		},
+		Features: FeaturesConfig{
+			AutoDownloadProviders: false,
+			AutoDownloadModules:   false,
+			MaxDownloadSizeMB:     500,
+		},
+		Auth: AuthConfig{
+			JWTExpirationHours: 8,
+			BcryptCost:         12,
+		},
+		Logging: LoggingConfig{
+			Level:    "info",
+			Format:   "text",
+			Output:   "stdout",
+			FilePath: "",
+		},
+		Telemetry: TelemetryConfig{
+			Enabled:       false,
+			OtelEnabled:   false,
+			OtelEndpoint:  "",
+			OtelProtocol:  "grpc",
+			ExportTraces:  false,
+			ExportMetrics: false,
+		},
+		Providers: ProvidersConfig{
+			GPGVerificationEnabled:      true,
+			GPGKeyURL:                   "https://www.hashicorp.com/.well-known/pgp-key.txt",
+			DownloadRetryAttempts:       5,
+			DownloadRetryInitialDelayMs: 1000,
+			DownloadTimeoutSeconds:      60,
+		},
+		Quota: QuotaConfig{
+			Enabled:                 false,
+			MaxStorageGB:            0,
+			WarningThresholdPercent: 80,
+		},
+	}
+}
+
+// GetJWTExpiration returns the JWT expiration as a duration
+func (c *AuthConfig) GetJWTExpiration() time.Duration {
+	return time.Duration(c.JWTExpirationHours) * time.Hour
+}
+
+// GetDownloadRetryDelay returns the initial retry delay as a duration
+func (c *ProvidersConfig) GetDownloadRetryDelay() time.Duration {
+	return time.Duration(c.DownloadRetryInitialDelayMs) * time.Millisecond
+}
+
+// GetDownloadTimeout returns the download timeout as a duration
+func (c *ProvidersConfig) GetDownloadTimeout() time.Duration {
+	return time.Duration(c.DownloadTimeoutSeconds) * time.Second
+}
+
+// GetBackupInterval returns the backup interval as a duration
+func (c *DatabaseConfig) GetBackupInterval() time.Duration {
+	return time.Duration(c.BackupIntervalHours) * time.Hour
+}
+
+// GetCacheTTL returns the cache TTL as a duration
+func (c *CacheConfig) GetCacheTTL() time.Duration {
+	return time.Duration(c.TTLSeconds) * time.Second
+}

@@ -1,0 +1,71 @@
+version: '3.8'
+
+services:
+  terraform-mirror:
+    image: terraform-mirror:latest
+    build:
+      context: ../..
+      dockerfile: deployments/docker/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - TFM_SERVER_PORT=8080
+      - TFM_STORAGE_TYPE=s3
+      - TFM_STORAGE_BUCKET=terraform-mirror
+      - TFM_STORAGE_REGION=us-east-1
+      - TFM_STORAGE_ENDPOINT=http://minio:9000
+      - TFM_STORAGE_ACCESS_KEY=minioadmin
+      - TFM_STORAGE_SECRET_KEY=minioadmin
+      - TFM_ADMIN_USERNAME=admin
+      - TFM_ADMIN_PASSWORD=changeme123
+    volumes:
+      - terraform-mirror-data:/data
+      - terraform-mirror-cache:/var/cache/tf-mirror
+    depends_on:
+      - minio
+    networks:
+      - terraform-mirror
+
+  minio:
+    image: minio/minio:latest
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    volumes:
+      - minio-data:/data
+    command: server /data --console-address ":9001"
+    networks:
+      - terraform-mirror
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # Create bucket on startup
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    networks:
+      - terraform-mirror
+    entrypoint: >
+      /bin/sh -c "
+      sleep 5;
+      mc alias set myminio http://minio:9000 minioadmin minioadmin;
+      mc mb myminio/terraform-mirror --ignore-existing;
+      mc anonymous set download myminio/terraform-mirror;
+      exit 0;
+      "
+
+volumes:
+  terraform-mirror-data:
+  terraform-mirror-cache:
+  minio-data:
+
+networks:
+  terraform-mirror:
+    driver: bridge
