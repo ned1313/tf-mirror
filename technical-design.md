@@ -788,7 +788,10 @@ See Configuration section for full list.
   - [x] Job repository (8 methods)
   - [x] Audit repository (6 methods)
 - [x] Comprehensive testing (11 config tests + 31 database tests)
-- [ ] S3 storage client
+- [x] S3 storage client (AWS SDK v2 with IAM + access key auth)
+- [x] Local filesystem adapter for testing
+- [x] Storage factory and helper functions
+- [x] Storage testing (28 tests, 57.9% coverage)
 - [ ] Two-tier cache implementation
 
 ### Provider Mirror
@@ -829,7 +832,7 @@ See Configuration section for full list.
 ### Testing
 - [x] Unit tests for configuration logic (11 tests, 65.7% coverage)
 - [x] Unit tests for database repositories (31 tests, 46.9% coverage)
-- [ ] Unit tests for S3 storage
+- [x] Unit tests for storage layer (28 tests, 57.9% coverage)
 - [ ] Unit tests for cache layer
 - [ ] Integration tests with MinIO
 - [ ] E2E tests with Terraform client
@@ -842,13 +845,14 @@ Phase 1 is considered complete when:
 1. ✅ Project structure is established
 2. ✅ Configuration system is functional (HCL + environment variables)
 3. ✅ Database layer is complete with all repositories (38 methods)
-4. Admin can upload a provider definition HCL file
-5. System downloads providers from registry.terraform.io
-6. Providers are verified with GPG signatures
-7. Providers are stored in S3-compatible storage
-8. Terraform client can discover and download cached providers
-9. Admin can view download job progress
-10. Admin can view storage usage and audit logs
-11. All tests pass (>80% coverage target)
-12. Container can be deployed via Docker Compose and Kubernetes
-13. Documentation is complete
+4. ✅ Storage layer is complete (S3 + local filesystem, 28 tests)
+5. Admin can upload a provider definition HCL file
+6. System downloads providers from registry.terraform.io
+7. Providers are verified with GPG signatures
+8. Providers are stored in S3-compatible storage
+9. Terraform client can discover and download cached providers
+10. Admin can view download job progress
+11. Admin can view storage usage and audit logs
+12. All tests pass (>80% coverage target)
+13. Container can be deployed via Docker Compose and Kubernetes
+14. Documentation is complete

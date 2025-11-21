@@ -38,12 +38,15 @@ Build the foundational infrastructure for Terraform Mirror with manual provider 
   - [x] Audit log repository (6 methods: Log, ListByUser, ListByResource, List, ListByAction, DeleteOlderThan)
 - [x] Comprehensive testing (31 tests, 46.9% coverage)
 
-#### Storage Layer
-- [ ] S3 client implementation
-- [ ] IAM role authentication support
-- [ ] Access key authentication support
-- [ ] Presigned URL generation
-- [ ] Local filesystem adapter (for testing)
+#### Storage Layer ✅
+- [x] S3 client implementation (AWS SDK v2)
+- [x] IAM role authentication support
+- [x] Access key authentication support
+- [x] Presigned URL generation
+- [x] Local filesystem adapter (for testing)
+- [x] Factory function for creating storage from config
+- [x] Helper functions for building storage keys
+- [x] Comprehensive testing (28 tests, 57.9% coverage)
 
 #### Cache Layer
 - [ ] In-memory LRU cache
@@ -201,28 +204,29 @@ Phase 1 is complete when:
 1. ✅ Project structure is established
 2. ✅ Configuration system is functional (HCL + environment variables)
 3. ✅ Database layer is complete with all repositories
-4. [ ] Admin can log in via web UI
-5. [ ] Admin can upload provider definition HCL file
-6. [ ] System downloads providers with GPG verification
-7. [ ] Providers are stored in S3
-8. [ ] Terraform client can discover providers via mirror
-9. [ ] Terraform client can download cached providers
-10. [ ] Admin can view job progress
-11. [ ] Admin can view storage statistics
-12. [ ] Admin can view audit logs
-13. [ ] All tests pass (>80% coverage)
-14. [ ] Container builds successfully
-15. [ ] Docker Compose deployment works
-16. [ ] Kubernetes deployment works
-17. [ ] Documentation is complete
+4. ✅ Storage layer is complete (S3 + local filesystem)
+5. [ ] Admin can log in via web UI
+6. [ ] Admin can upload provider definition HCL file
+7. [ ] System downloads providers with GPG verification
+8. [ ] Providers are stored in S3
+9. [ ] Terraform client can discover providers via mirror
+10. [ ] Terraform client can download cached providers
+11. [ ] Admin can view job progress
+12. [ ] Admin can view storage statistics
+13. [ ] Admin can view audit logs
+14. [ ] All tests pass (>80% coverage)
+15. [ ] Container builds successfully
+16. [ ] Docker Compose deployment works
+17. [ ] Kubernetes deployment works
+18. [ ] Documentation is complete
 
 ## Next Steps (Immediate)
 
 1. ✅ Implement configuration loader with HCL support
 2. ✅ Set up database connection and migrations
 3. ✅ Create all repository layers (Provider, User, Session, Job, Audit)
-4. **Next: Create S3 storage client**
-5. Implement basic HTTP server with health check
+4. ✅ Create S3 storage client with local filesystem adapter
+5. **Next: Implement HTTP server with Chi router**
 6. Create admin authentication (login/logout)
 7. Build provider definition parser
 8. Implement provider downloader with GPG verification
