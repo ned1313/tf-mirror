@@ -95,16 +95,20 @@ Build the foundational infrastructure for Terraform Mirror with manual provider 
 - [ ] Configuration viewing
 - [ ] Backup trigger endpoint
 
-#### HTTP Server
-- [ ] Chi router setup
-- [ ] Middleware implementation
-  - [ ] Request logging
-  - [ ] Authentication
-  - [ ] CORS
-  - [ ] Panic recovery
-- [ ] Health check endpoint
-- [ ] Metrics endpoint (OpenTelemetry)
-- [ ] Graceful shutdown
+#### HTTP Server ✅
+- [x] Chi router setup
+- [x] Middleware implementation
+  - [x] Request logging (Chi middleware)
+  - [x] CORS (for trusted proxies)
+  - [x] Panic recovery (Chi middleware)
+  - [ ] Authentication (TODO)
+- [x] Health check endpoint
+- [x] Service discovery endpoint (/.well-known/terraform.json)
+- [x] Route structure for all endpoints
+- [x] Handler stub implementations
+- [x] Graceful shutdown
+- [x] Comprehensive testing (11 tests, 63.6% coverage)
+- [ ] Metrics endpoint (OpenTelemetry) - TODO
 
 ### Frontend Components
 
@@ -226,10 +230,11 @@ Phase 1 is complete when:
 2. ✅ Set up database connection and migrations
 3. ✅ Create all repository layers (Provider, User, Session, Job, Audit)
 4. ✅ Create S3 storage client with local filesystem adapter
-5. **Next: Implement HTTP server with Chi router**
-6. Create admin authentication (login/logout)
-7. Build provider definition parser
-8. Implement provider downloader with GPG verification
+5. ✅ Implement HTTP server with Chi router (skeleton complete)
+6. **Next: Implement Provider Mirror Protocol endpoints (service discovery, version listing, downloads)**
+7. Create admin authentication (login/logout with JWT)
+8. Build provider definition parser
+9. Implement provider downloader with GPG verification
 
 ## Timeline Estimate
 

@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/yourusername/terraform-mirror/internal/config"
+	"github.com/ned1313/terraform-mirror/internal/config"
 )
 
 // NewFromConfig creates a storage instance from application configuration

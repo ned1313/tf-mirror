@@ -1,3 +1,4 @@
+//go:build integration
 // +build integration
 
 package storage
@@ -37,12 +38,12 @@ func createMinIOStorage(t *testing.T) *S3Storage {
 
 func ensureBucketExists(t *testing.T, storage *S3Storage) {
 	ctx := context.Background()
-	
+
 	// Try to create the bucket (will fail if it exists, which is fine)
 	_, err := storage.client.CreateBucket(ctx, &s3.CreateBucketInput{
 		Bucket: aws.String(storage.bucket),
 	})
-	
+
 	// Ignore "bucket already exists" errors
 	if err != nil {
 		t.Logf("Bucket creation note: %v", err)
@@ -237,7 +238,7 @@ func TestS3Integration_ListObjects(t *testing.T) {
 	// List only AWS providers
 	keys, err = storage.ListObjects(ctx, "providers/hashicorp/aws/")
 	require.NoError(t, err)
-	
+
 	// Filter to only keys that match our test
 	awsKeys := []string{}
 	for _, key := range keys {
