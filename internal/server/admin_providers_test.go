@@ -90,8 +90,9 @@ provider "hashicorp/random" {
 	err := json.NewDecoder(rr.Body).Decode(&response)
 	require.NoError(t, err)
 
-	assert.NotNil(t, response.Stats)
-	assert.Contains(t, response.Message, "Provider loading completed")
+	assert.Greater(t, response.JobID, int64(0), "Job ID should be positive")
+	assert.Greater(t, response.Total, 0, "Total providers should be > 0")
+	assert.Contains(t, response.Message, "Provider loading job created")
 }
 
 func TestHandleLoadProviders_InvalidHCL(t *testing.T) {

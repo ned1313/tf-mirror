@@ -23,6 +23,7 @@ type Server struct {
 
 	// Repositories
 	providerRepo *database.ProviderRepository
+	jobRepo      *database.JobRepository
 }
 
 // New creates a new HTTP server instance
@@ -32,6 +33,7 @@ func New(cfg *config.Config, db *database.DB, storage storage.Storage) *Server {
 		db:           db,
 		storage:      storage,
 		providerRepo: database.NewProviderRepository(db),
+		jobRepo:      database.NewJobRepository(db),
 	}
 
 	s.setupRouter()
