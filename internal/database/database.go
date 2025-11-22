@@ -221,7 +221,7 @@ CREATE INDEX idx_admin_users_active ON admin_users(active);
 CREATE TABLE admin_sessions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
-    token_hash TEXT NOT NULL UNIQUE,
+    token_jti TEXT NOT NULL UNIQUE,
     
     -- Session metadata
     ip_address TEXT,
@@ -237,7 +237,7 @@ CREATE TABLE admin_sessions (
     FOREIGN KEY (user_id) REFERENCES admin_users(id) ON DELETE CASCADE
 );
 
-CREATE INDEX idx_admin_sessions_token ON admin_sessions(token_hash);
+CREATE INDEX idx_admin_sessions_token ON admin_sessions(token_jti);
 CREATE INDEX idx_admin_sessions_user ON admin_sessions(user_id);
 CREATE INDEX idx_admin_sessions_expires ON admin_sessions(expires_at);
 

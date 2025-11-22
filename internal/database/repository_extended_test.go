@@ -34,7 +34,7 @@ func TestSessionRepository_Create(t *testing.T) {
 
 	session := &AdminSession{
 		UserID:    user.ID,
-		TokenHash: "hash123",
+		TokenJTI:  "jti-hash123",
 		IPAddress: sql.NullString{String: "192.168.1.1", Valid: true},
 		UserAgent: sql.NullString{String: "Mozilla/5.0", Valid: true},
 		ExpiresAt: time.Now().Add(24 * time.Hour),
@@ -46,7 +46,7 @@ func TestSessionRepository_Create(t *testing.T) {
 	assert.NotZero(t, session.CreatedAt)
 }
 
-func TestSessionRepository_GetByTokenHash(t *testing.T) {
+func TestSessionRepository_GetByTokenJTI(t *testing.T) {
 	db := setupTestDB(t)
 	repo := NewSessionRepository(db)
 	ctx := context.Background()
@@ -55,7 +55,7 @@ func TestSessionRepository_GetByTokenHash(t *testing.T) {
 
 	session := &AdminSession{
 		UserID:    user.ID,
-		TokenHash: "hash123",
+		TokenJTI:  "jti-hash123",
 		IPAddress: sql.NullString{String: "192.168.1.1", Valid: true},
 		UserAgent: sql.NullString{String: "Mozilla/5.0", Valid: true},
 		ExpiresAt: time.Now().Add(24 * time.Hour),
@@ -64,14 +64,14 @@ func TestSessionRepository_GetByTokenHash(t *testing.T) {
 	err := repo.Create(ctx, session)
 	require.NoError(t, err)
 
-	found, err := repo.GetByTokenHash(ctx, "hash123")
+	found, err := repo.GetByTokenJTI(ctx, "jti-hash123")
 	require.NoError(t, err)
 	require.NotNil(t, found)
 	assert.Equal(t, session.ID, found.ID)
-	assert.Equal(t, session.TokenHash, found.TokenHash)
+	assert.Equal(t, session.TokenJTI, found.TokenJTI)
 
 	// Test not found
-	notFound, err := repo.GetByTokenHash(ctx, "nonexistent")
+	notFound, err := repo.GetByTokenJTI(ctx, "nonexistent")
 	require.NoError(t, err)
 	assert.Nil(t, notFound)
 }
@@ -88,7 +88,7 @@ func TestSessionRepository_ListByUserID(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		session := &AdminSession{
 			UserID:    user1.ID,
-			TokenHash: "user1_hash" + string(rune('1'+i)),
+			TokenJTI:  "user1_jti" + string(rune('1'+i)),
 			ExpiresAt: time.Now().Add(24 * time.Hour),
 		}
 		err := repo.Create(ctx, session)
@@ -98,7 +98,7 @@ func TestSessionRepository_ListByUserID(t *testing.T) {
 	// Create session for user 2
 	session := &AdminSession{
 		UserID:    user2.ID,
-		TokenHash: "user2_hash",
+		TokenJTI:  "user2_jti",
 		ExpiresAt: time.Now().Add(24 * time.Hour),
 	}
 	err := repo.Create(ctx, session)
@@ -125,7 +125,7 @@ func TestSessionRepository_DeleteExpired(t *testing.T) {
 	// Create expired session
 	expiredSession := &AdminSession{
 		UserID:    user.ID,
-		TokenHash: "expired",
+		TokenJTI:  "expired-jti",
 		ExpiresAt: time.Now().Add(-1 * time.Hour),
 	}
 	err := repo.Create(ctx, expiredSession)
@@ -134,7 +134,7 @@ func TestSessionRepository_DeleteExpired(t *testing.T) {
 	// Create valid session
 	validSession := &AdminSession{
 		UserID:    user.ID,
-		TokenHash: "valid",
+		TokenJTI:  "valid-jti",
 		ExpiresAt: time.Now().Add(24 * time.Hour),
 	}
 	err = repo.Create(ctx, validSession)
@@ -146,12 +146,12 @@ func TestSessionRepository_DeleteExpired(t *testing.T) {
 	assert.Equal(t, int64(1), count)
 
 	// Verify expired is gone
-	found, err := repo.GetByTokenHash(ctx, "expired")
+	found, err := repo.GetByTokenJTI(ctx, "expired-jti")
 	require.NoError(t, err)
 	assert.Nil(t, found)
 
 	// Verify valid still exists
-	found, err = repo.GetByTokenHash(ctx, "valid")
+	found, err = repo.GetByTokenJTI(ctx, "valid-jti")
 	require.NoError(t, err)
 	assert.NotNil(t, found)
 }

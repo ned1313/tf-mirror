@@ -128,8 +128,8 @@ func validateAuth(cfg *AuthConfig) error {
 		return fmt.Errorf("jwt_expiration_hours must be at least 1")
 	}
 
-	if cfg.BcryptCost < 4 || cfg.BcryptCost > 31 {
-		return fmt.Errorf("bcrypt_cost must be between 4 and 31, got %d", cfg.BcryptCost)
+	if cfg.BCryptCost < 4 || cfg.BCryptCost > 31 {
+		return fmt.Errorf("bcrypt_cost must be between 4 and 31, got %d", cfg.BCryptCost)
 	}
 
 	return nil

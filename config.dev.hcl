@@ -38,6 +38,15 @@ features {
 auth {
   jwt_expiration_hours = 8
   bcrypt_cost = 12
+  jwt_secret = "dev-secret-key-change-in-production-use-at-least-32-chars"
+}
+
+processor {
+  polling_interval_seconds = 5    # Check for new jobs every 5 seconds
+  max_concurrent_jobs = 3         # Process up to 3 jobs simultaneously
+  retry_attempts = 3              # Retry failed downloads up to 3 times
+  retry_delay_seconds = 5         # Wait 5 seconds between retries
+  worker_shutdown_seconds = 30    # Allow 30 seconds for graceful shutdown
 }
 
 logging {

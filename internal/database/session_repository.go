@@ -20,13 +20,13 @@ func NewSessionRepository(db *DB) *SessionRepository {
 // Create creates a new session
 func (r *SessionRepository) Create(ctx context.Context, session *AdminSession) error {
 	query := `
-		INSERT INTO admin_sessions (user_id, token_hash, ip_address, user_agent, expires_at)
+		INSERT INTO admin_sessions (user_id, token_jti, ip_address, user_agent, expires_at)
 		VALUES (?, ?, ?, ?, ?)
 	`
 
 	result, err := r.db.conn.ExecContext(ctx, query,
 		session.UserID,
-		session.TokenHash,
+		session.TokenJTI,
 		session.IPAddress,
 		session.UserAgent,
 		session.ExpiresAt,
@@ -45,19 +45,19 @@ func (r *SessionRepository) Create(ctx context.Context, session *AdminSession) e
 	return nil
 }
 
-// GetByTokenHash retrieves a session by token hash
-func (r *SessionRepository) GetByTokenHash(ctx context.Context, tokenHash string) (*AdminSession, error) {
+// GetByTokenJTI retrieves a session by JWT ID
+func (r *SessionRepository) GetByTokenJTI(ctx context.Context, jti string) (*AdminSession, error) {
 	query := `
-		SELECT id, user_id, token_hash, ip_address, user_agent, created_at, expires_at, revoked
+		SELECT id, user_id, token_jti, ip_address, user_agent, created_at, expires_at, revoked
 		FROM admin_sessions
-		WHERE token_hash = ?
+		WHERE token_jti = ?
 	`
 
 	var session AdminSession
-	err := r.db.conn.QueryRowContext(ctx, query, tokenHash).Scan(
+	err := r.db.conn.QueryRowContext(ctx, query, jti).Scan(
 		&session.ID,
 		&session.UserID,
-		&session.TokenHash,
+		&session.TokenJTI,
 		&session.IPAddress,
 		&session.UserAgent,
 		&session.CreatedAt,
@@ -77,7 +77,7 @@ func (r *SessionRepository) GetByTokenHash(ctx context.Context, tokenHash string
 // GetByID retrieves a session by ID
 func (r *SessionRepository) GetByID(ctx context.Context, id int64) (*AdminSession, error) {
 	query := `
-		SELECT id, user_id, token_hash, ip_address, user_agent, created_at, expires_at, revoked
+		SELECT id, user_id, token_jti, ip_address, user_agent, created_at, expires_at, revoked
 		FROM admin_sessions
 		WHERE id = ?
 	`
@@ -86,7 +86,7 @@ func (r *SessionRepository) GetByID(ctx context.Context, id int64) (*AdminSessio
 	err := r.db.conn.QueryRowContext(ctx, query, id).Scan(
 		&session.ID,
 		&session.UserID,
-		&session.TokenHash,
+		&session.TokenJTI,
 		&session.IPAddress,
 		&session.UserAgent,
 		&session.CreatedAt,
@@ -106,7 +106,7 @@ func (r *SessionRepository) GetByID(ctx context.Context, id int64) (*AdminSessio
 // ListByUserID retrieves all sessions for a user
 func (r *SessionRepository) ListByUserID(ctx context.Context, userID int64) ([]*AdminSession, error) {
 	query := `
-		SELECT id, user_id, token_hash, ip_address, user_agent, created_at, expires_at, revoked
+		SELECT id, user_id, token_jti, ip_address, user_agent, created_at, expires_at, revoked
 		FROM admin_sessions
 		WHERE user_id = ?
 		ORDER BY created_at DESC
@@ -124,7 +124,7 @@ func (r *SessionRepository) ListByUserID(ctx context.Context, userID int64) ([]*
 		if err := rows.Scan(
 			&session.ID,
 			&session.UserID,
-			&session.TokenHash,
+			&session.TokenJTI,
 			&session.IPAddress,
 			&session.UserAgent,
 			&session.CreatedAt,
@@ -160,11 +160,11 @@ func (r *SessionRepository) Delete(ctx context.Context, id int64) error {
 	return nil
 }
 
-// DeleteByTokenHash deletes a session by token hash
-func (r *SessionRepository) DeleteByTokenHash(ctx context.Context, tokenHash string) error {
-	query := `DELETE FROM admin_sessions WHERE token_hash = ?`
+// DeleteByTokenJTI deletes a session by JWT ID
+func (r *SessionRepository) DeleteByTokenJTI(ctx context.Context, jti string) error {
+	query := `DELETE FROM admin_sessions WHERE token_jti = ?`
 
-	result, err := r.db.conn.ExecContext(ctx, query, tokenHash)
+	result, err := r.db.conn.ExecContext(ctx, query, jti)
 	if err != nil {
 		return fmt.Errorf("failed to delete session: %w", err)
 	}
@@ -181,11 +181,11 @@ func (r *SessionRepository) DeleteByTokenHash(ctx context.Context, tokenHash str
 	return nil
 }
 
-// RevokeByTokenHash revokes a session by token hash
-func (r *SessionRepository) RevokeByTokenHash(ctx context.Context, tokenHash string) error {
-	query := `UPDATE admin_sessions SET revoked = 1 WHERE token_hash = ?`
+// RevokeByTokenJTI revokes a session by JWT ID
+func (r *SessionRepository) RevokeByTokenJTI(ctx context.Context, jti string) error {
+	query := `UPDATE admin_sessions SET revoked = 1 WHERE token_jti = ?`
 
-	result, err := r.db.conn.ExecContext(ctx, query, tokenHash)
+	result, err := r.db.conn.ExecContext(ctx, query, jti)
 	if err != nil {
 		return fmt.Errorf("failed to revoke session: %w", err)
 	}

@@ -53,9 +53,9 @@ type AdminUser struct {
 
 // AdminSession represents an active admin session
 type AdminSession struct {
-	ID        int64
-	UserID    int64
-	TokenHash string
+	ID       int64
+	UserID   int64
+	TokenJTI string
 
 	// Session metadata
 	IPAddress sql.NullString

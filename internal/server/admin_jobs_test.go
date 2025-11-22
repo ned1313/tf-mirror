@@ -15,7 +15,10 @@ func TestHandleGetJob_NotFound(t *testing.T) {
 	server, cleanup := setupAdminTest(t)
 	defer cleanup()
 
+	token := getAuthToken(t, server)
+
 	req := httptest.NewRequest("GET", "/admin/api/jobs/999", nil)
+	addAuthHeader(req, token)
 	rr := httptest.NewRecorder()
 
 	server.router.ServeHTTP(rr, req)
@@ -32,7 +35,10 @@ func TestHandleGetJob_InvalidID(t *testing.T) {
 	server, cleanup := setupAdminTest(t)
 	defer cleanup()
 
+	token := getAuthToken(t, server)
+
 	req := httptest.NewRequest("GET", "/admin/api/jobs/invalid", nil)
+	addAuthHeader(req, token)
 	rr := httptest.NewRecorder()
 
 	server.router.ServeHTTP(rr, req)
@@ -49,7 +55,10 @@ func TestHandleListJobs_Empty(t *testing.T) {
 	server, cleanup := setupAdminTest(t)
 	defer cleanup()
 
+	token := getAuthToken(t, server)
+
 	req := httptest.NewRequest("GET", "/admin/api/jobs", nil)
+	addAuthHeader(req, token)
 	rr := httptest.NewRecorder()
 
 	server.router.ServeHTTP(rr, req)
@@ -70,7 +79,10 @@ func TestHandleListJobs_WithCustomPagination(t *testing.T) {
 	server, cleanup := setupAdminTest(t)
 	defer cleanup()
 
+	token := getAuthToken(t, server)
+
 	req := httptest.NewRequest("GET", "/admin/api/jobs?limit=5&offset=10", nil)
+	addAuthHeader(req, token)
 	rr := httptest.NewRecorder()
 
 	server.router.ServeHTTP(rr, req)
@@ -89,6 +101,8 @@ func TestJobIntegration_CreateAndRetrieve(t *testing.T) {
 	server, cleanup := setupAdminTest(t)
 	defer cleanup()
 
+	token := getAuthToken(t, server)
+
 	// Create a provider loading job by uploading HCL
 	hcl := `
 provider "hashicorp/random" {
@@ -98,6 +112,7 @@ provider "hashicorp/random" {
 `
 
 	req, _ := createMultipartRequest(t, hcl)
+	addAuthHeader(req, token)
 	rr := httptest.NewRecorder()
 	server.router.ServeHTTP(rr, req)
 
@@ -111,6 +126,7 @@ provider "hashicorp/random" {
 	// Now retrieve the job using proper ID formatting
 	jobURL := "/admin/api/jobs/" + strconv.FormatInt(createResponse.JobID, 10)
 	req = httptest.NewRequest("GET", jobURL, nil)
+	addAuthHeader(req, token)
 	rr = httptest.NewRecorder()
 	server.router.ServeHTTP(rr, req)
 
@@ -130,6 +146,7 @@ provider "hashicorp/random" {
 
 	// Verify job appears in list
 	req = httptest.NewRequest("GET", "/admin/api/jobs", nil)
+	addAuthHeader(req, token)
 	rr = httptest.NewRecorder()
 	server.router.ServeHTTP(rr, req)
 

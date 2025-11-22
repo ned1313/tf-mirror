@@ -128,26 +128,7 @@ func (s *Server) handleServiceDiscovery(w http.ResponseWriter, r *http.Request) 
 }
 
 // Provider Mirror Protocol handlers are now in provider_mirror.go
-
-// handleLogin handles admin login
-// TODO: Implement full logic with JWT
-func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusNotImplemented)
-	json.NewEncoder(w).Encode(map[string]string{
-		"error": "not implemented yet",
-	})
-}
-
-// handleLogout handles admin logout
-// TODO: Implement full logic
-func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusNotImplemented)
-	json.NewEncoder(w).Encode(map[string]string{
-		"error": "not implemented yet",
-	})
-}
+// Authentication handlers are now in auth_handlers.go
 
 // handleListProviders lists all providers
 // TODO: Implement full logic
@@ -374,4 +355,12 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusNotImplemented)
 	w.Write([]byte("# Metrics not implemented yet\n"))
+}
+
+// handleProcessorStatus returns the current processor status
+func (s *Server) handleProcessorStatus(w http.ResponseWriter, r *http.Request) {
+	status := s.processorService.GetStatus()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(status)
 }

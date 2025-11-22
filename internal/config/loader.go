@@ -144,7 +144,7 @@ func applyEnvOverrides(cfg *Config) {
 	}
 	if val := os.Getenv("TFM_AUTH_BCRYPT_COST"); val != "" {
 		if cost, err := strconv.Atoi(val); err == nil {
-			cfg.Auth.BcryptCost = cost
+			cfg.Auth.BCryptCost = cost
 		}
 	}
 

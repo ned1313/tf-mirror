@@ -3,13 +3,16 @@ package server
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/ned1313/terraform-mirror/internal/auth"
 	"github.com/ned1313/terraform-mirror/internal/config"
 	"github.com/ned1313/terraform-mirror/internal/database"
+	"github.com/ned1313/terraform-mirror/internal/processor"
 	"github.com/ned1313/terraform-mirror/internal/storage"
 )
 
@@ -20,6 +23,11 @@ type Server struct {
 	storage storage.Storage
 	router  *chi.Mux
 	server  *http.Server
+	logger  *log.Logger
+
+	// Services
+	authService      *auth.Service
+	processorService *processor.Service
 
 	// Repositories
 	providerRepo *database.ProviderRepository
@@ -28,12 +36,32 @@ type Server struct {
 
 // New creates a new HTTP server instance
 func New(cfg *config.Config, db *database.DB, storage storage.Storage) *Server {
+	// Create auth service
+	authService := auth.NewService(
+		cfg.Auth.JWTSecret,
+		cfg.Auth.JWTExpirationHours,
+		cfg.Auth.BCryptCost,
+	)
+
+	// Create processor service
+	processorConfig := processor.Config{
+		PollingInterval:    time.Duration(cfg.Processor.PollingIntervalSeconds) * time.Second,
+		MaxConcurrentJobs:  cfg.Processor.MaxConcurrentJobs,
+		RetryAttempts:      cfg.Processor.RetryAttempts,
+		RetryDelay:         time.Duration(cfg.Processor.RetryDelaySeconds) * time.Second,
+		WorkerShutdownTime: time.Duration(cfg.Processor.WorkerShutdownSeconds) * time.Second,
+	}
+	processorService := processor.NewService(processorConfig, db)
+
 	s := &Server{
-		config:       cfg,
-		db:           db,
-		storage:      storage,
-		providerRepo: database.NewProviderRepository(db),
-		jobRepo:      database.NewJobRepository(db),
+		config:           cfg,
+		db:               db,
+		storage:          storage,
+		logger:           log.Default(),
+		authService:      authService,
+		processorService: processorService,
+		providerRepo:     database.NewProviderRepository(db),
+		jobRepo:          database.NewJobRepository(db),
 	}
 
 	s.setupRouter()
@@ -79,35 +107,40 @@ func (s *Server) setupRouter() {
 
 	// Admin API endpoints (authentication required)
 	r.Route("/admin/api", func(r chi.Router) {
-		// TODO: Add authentication middleware
-		// r.Use(s.authMiddleware)
-
-		// Authentication
+		// Authentication endpoints (no auth required)
 		r.Post("/login", s.handleLogin)
 		r.Post("/logout", s.handleLogout)
 
-		// Provider management
-		r.Post("/providers/load", s.handleLoadProviders)
-		r.Get("/providers", s.handleListProviders)
-		r.Post("/providers", s.handleUploadProvider)
-		r.Get("/providers/{id}", s.handleGetProvider)
-		r.Put("/providers/{id}", s.handleUpdateProvider)
-		r.Delete("/providers/{id}", s.handleDeleteProvider)
+		// Protected routes (authentication required)
+		r.Group(func(r chi.Router) {
+			r.Use(s.authMiddleware)
 
-		// Job management
-		r.Get("/jobs", s.handleListJobs)
-		r.Get("/jobs/{id}", s.handleGetJob)
-		r.Post("/jobs/{id}/retry", s.handleRetryJob)
+			// Provider management
+			r.Post("/providers/load", s.handleLoadProviders)
+			r.Get("/providers", s.handleListProviders)
+			r.Post("/providers", s.handleUploadProvider)
+			r.Get("/providers/{id}", s.handleGetProvider)
+			r.Put("/providers/{id}", s.handleUpdateProvider)
+			r.Delete("/providers/{id}", s.handleDeleteProvider)
 
-		// Statistics
-		r.Get("/stats/storage", s.handleStorageStats)
-		r.Get("/stats/audit", s.handleAuditLogs)
+			// Job management
+			r.Get("/jobs", s.handleListJobs)
+			r.Get("/jobs/{id}", s.handleGetJob)
+			r.Post("/jobs/{id}/retry", s.handleRetryJob)
 
-		// Configuration
-		r.Get("/config", s.handleGetConfig)
+			// Processor status
+			r.Get("/processor/status", s.handleProcessorStatus)
 
-		// Backup
-		r.Post("/backup", s.handleTriggerBackup)
+			// Statistics
+			r.Get("/stats/storage", s.handleStorageStats)
+			r.Get("/stats/audit", s.handleAuditLogs)
+
+			// Configuration
+			r.Get("/config", s.handleGetConfig)
+
+			// Backup
+			r.Post("/backup", s.handleTriggerBackup)
+		})
 	})
 
 	// Metrics endpoint (if telemetry is enabled)
@@ -120,6 +153,11 @@ func (s *Server) setupRouter() {
 
 // Start starts the HTTP server
 func (s *Server) Start() error {
+	// Start the background processor
+	if err := s.processorService.Start(context.Background()); err != nil {
+		return fmt.Errorf("failed to start processor: %w", err)
+	}
+
 	addr := fmt.Sprintf(":%d", s.config.Server.Port)
 
 	s.server = &http.Server{
@@ -147,7 +185,15 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	if s.server == nil {
 		return nil
 	}
+
 	fmt.Println("Shutting down server...")
+
+	// Stop the processor first to prevent new job processing
+	if err := s.processorService.Stop(); err != nil {
+		s.logger.Printf("Error stopping processor: %v", err)
+	}
+
+	// Shutdown the HTTP server
 	return s.server.Shutdown(ctx)
 }
 

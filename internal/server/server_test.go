@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/ned1313/terraform-mirror/internal/config"
 	"github.com/ned1313/terraform-mirror/internal/database"
@@ -41,7 +42,15 @@ func setupTestServer(t *testing.T) (*Server, func()) {
 		},
 		Auth: config.AuthConfig{
 			JWTExpirationHours: 24,
-			BcryptCost:         10,
+			BCryptCost:         10,
+			JWTSecret:          "test-secret-key-for-testing",
+		},
+		Processor: config.ProcessorConfig{
+			PollingIntervalSeconds: 10,
+			MaxConcurrentJobs:      3,
+			RetryAttempts:          3,
+			RetryDelaySeconds:      5,
+			WorkerShutdownSeconds:  30,
 		},
 		Telemetry: config.TelemetryConfig{
 			Enabled: true,
@@ -68,6 +77,40 @@ func setupTestServer(t *testing.T) (*Server, func()) {
 	}
 
 	return srv, cleanup
+}
+
+// createTestToken creates a test admin user and returns a valid JWT token
+func createTestToken(t *testing.T, srv *Server) string {
+	// Create admin user
+	userRepo := database.NewUserRepository(srv.db)
+	hashedPassword, err := srv.authService.HashPassword("testpass")
+	require.NoError(t, err)
+
+	user := &database.AdminUser{
+		Username:     "testadmin",
+		PasswordHash: hashedPassword,
+		Active:       true,
+	}
+	err = userRepo.Create(context.Background(), user)
+	require.NoError(t, err)
+
+	// Generate token
+	token, jti, expiresAt, err := srv.authService.GenerateToken(user.ID, user.Username)
+	require.NoError(t, err)
+
+	// Create session record
+	sessionRepo := database.NewSessionRepository(srv.db)
+	session := &database.AdminSession{
+		UserID:    user.ID,
+		TokenJTI:  jti,
+		ExpiresAt: expiresAt,
+		Revoked:   false,
+		CreatedAt: time.Now(),
+	}
+	err = sessionRepo.Create(context.Background(), session)
+	require.NoError(t, err)
+
+	return token
 }
 
 func TestNew(t *testing.T) {
@@ -127,7 +170,7 @@ func TestHandleServiceDiscovery(t *testing.T) {
 	assert.Equal(t, "/v1/providers/", response.ProvidersV1)
 }
 
-func TestHandleLogin_NotImplemented(t *testing.T) {
+func TestHandleLogin_MissingBody(t *testing.T) {
 	srv, cleanup := setupTestServer(t)
 	defer cleanup()
 
@@ -136,14 +179,18 @@ func TestHandleLogin_NotImplemented(t *testing.T) {
 
 	srv.Router().ServeHTTP(w, req)
 
-	assert.Equal(t, http.StatusNotImplemented, w.Code)
+	// Should return bad request when no body is provided
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
 func TestHandleListProviders_Success(t *testing.T) {
 	srv, cleanup := setupTestServer(t)
 	defer cleanup()
 
+	token := createTestToken(t, srv)
+
 	req := httptest.NewRequest(http.MethodGet, "/admin/api/providers", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
 	w := httptest.NewRecorder()
 
 	srv.Router().ServeHTTP(w, req)

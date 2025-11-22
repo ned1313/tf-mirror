@@ -12,6 +12,7 @@ type Config struct {
 	Cache     CacheConfig     `hcl:"cache,block"`
 	Features  FeaturesConfig  `hcl:"features,block"`
 	Auth      AuthConfig      `hcl:"auth,block"`
+	Processor ProcessorConfig `hcl:"processor,block"`
 	Logging   LoggingConfig   `hcl:"logging,block"`
 	Telemetry TelemetryConfig `hcl:"telemetry,block"`
 	Providers ProvidersConfig `hcl:"providers,block"`
@@ -65,8 +66,18 @@ type FeaturesConfig struct {
 
 // AuthConfig contains authentication settings
 type AuthConfig struct {
-	JWTExpirationHours int `hcl:"jwt_expiration_hours,optional"`
-	BcryptCost         int `hcl:"bcrypt_cost,optional"`
+	JWTSecret          string `hcl:"jwt_secret,optional"`
+	JWTExpirationHours int    `hcl:"jwt_expiration_hours,optional"`
+	BCryptCost         int    `hcl:"bcrypt_cost,optional"`
+}
+
+// ProcessorConfig contains background job processor settings
+type ProcessorConfig struct {
+	PollingIntervalSeconds int `hcl:"polling_interval_seconds,optional"`
+	MaxConcurrentJobs      int `hcl:"max_concurrent_jobs,optional"`
+	RetryAttempts          int `hcl:"retry_attempts,optional"`
+	RetryDelaySeconds      int `hcl:"retry_delay_seconds,optional"`
+	WorkerShutdownSeconds  int `hcl:"worker_shutdown_seconds,optional"`
 }
 
 // LoggingConfig contains logging settings
@@ -143,7 +154,15 @@ func DefaultConfig() *Config {
 		},
 		Auth: AuthConfig{
 			JWTExpirationHours: 8,
-			BcryptCost:         12,
+			BCryptCost:         12,
+			JWTSecret:          "", // Must be set via environment variable or config file
+		},
+		Processor: ProcessorConfig{
+			PollingIntervalSeconds: 10,
+			MaxConcurrentJobs:      3,
+			RetryAttempts:          3,
+			RetryDelaySeconds:      5,
+			WorkerShutdownSeconds:  30,
 		},
 		Logging: LoggingConfig{
 			Level:    "info",

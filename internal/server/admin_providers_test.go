@@ -2,12 +2,14 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/ned1313/terraform-mirror/internal/config"
 	"github.com/ned1313/terraform-mirror/internal/database"
@@ -33,17 +35,62 @@ func setupAdminTest(t *testing.T) (*Server, func()) {
 			Port:        8080,
 			BehindProxy: false,
 		},
+		Auth: config.AuthConfig{
+			JWTExpirationHours: 24,
+			BCryptCost:         10,
+			JWTSecret:          "test-secret-key-for-testing",
+		},
+		Processor: config.ProcessorConfig{
+			PollingIntervalSeconds: 10,
+			MaxConcurrentJobs:      3,
+			RetryAttempts:          3,
+			RetryDelaySeconds:      5,
+			WorkerShutdownSeconds:  30,
+		},
 	}
 
 	// Create server
 	server := New(cfg, db, store)
 
 	cleanup := func() {
+		server.Shutdown(context.Background())
 		db.Close()
 		store.Close()
 	}
 
 	return server, cleanup
+}
+
+// getAuthToken creates a test user and returns a valid JWT token
+func getAuthToken(t *testing.T, server *Server) string {
+	userRepo := database.NewUserRepository(server.db)
+	hashedPassword, err := server.authService.HashPassword("testpass")
+	require.NoError(t, err)
+
+	user := &database.AdminUser{
+		Username:     "testadmin",
+		PasswordHash: hashedPassword,
+		Active:       true,
+	}
+	err = userRepo.Create(context.Background(), user)
+	require.NoError(t, err)
+
+	token, jti, expiresAt, err := server.authService.GenerateToken(user.ID, user.Username)
+	require.NoError(t, err)
+
+	// Create session record
+	sessionRepo := database.NewSessionRepository(server.db)
+	session := &database.AdminSession{
+		UserID:    user.ID,
+		TokenJTI:  jti,
+		ExpiresAt: expiresAt,
+		Revoked:   false,
+		CreatedAt: time.Now(),
+	}
+	err = sessionRepo.Create(context.Background(), session)
+	require.NoError(t, err)
+
+	return token
 }
 
 func createMultipartRequest(t *testing.T, content string) (*http.Request, string) {
@@ -66,9 +113,16 @@ func createMultipartRequest(t *testing.T, content string) (*http.Request, string
 	return req, writer.FormDataContentType()
 }
 
+// addAuthHeader adds authentication header to a request
+func addAuthHeader(req *http.Request, token string) {
+	req.Header.Set("Authorization", "Bearer "+token)
+}
+
 func TestHandleLoadProviders_Success(t *testing.T) {
 	server, cleanup := setupAdminTest(t)
 	defer cleanup()
+
+	token := getAuthToken(t, server)
 
 	hcl := `
 provider "hashicorp/random" {
@@ -78,6 +132,7 @@ provider "hashicorp/random" {
 `
 
 	req, _ := createMultipartRequest(t, hcl)
+	addAuthHeader(req, token)
 	rr := httptest.NewRecorder()
 
 	server.router.ServeHTTP(rr, req)
@@ -99,11 +154,14 @@ func TestHandleLoadProviders_InvalidHCL(t *testing.T) {
 	server, cleanup := setupAdminTest(t)
 	defer cleanup()
 
+	token := getAuthToken(t, server)
+
 	hcl := `
 invalid hcl content {{{
 `
 
 	req, _ := createMultipartRequest(t, hcl)
+	addAuthHeader(req, token)
 	rr := httptest.NewRecorder()
 
 	server.router.ServeHTTP(rr, req)
@@ -122,11 +180,14 @@ func TestHandleLoadProviders_NoProviders(t *testing.T) {
 	server, cleanup := setupAdminTest(t)
 	defer cleanup()
 
+	token := getAuthToken(t, server)
+
 	hcl := `
 # Empty file with no providers
 `
 
 	req, _ := createMultipartRequest(t, hcl)
+	addAuthHeader(req, token)
 	rr := httptest.NewRecorder()
 
 	server.router.ServeHTTP(rr, req)
@@ -146,9 +207,12 @@ func TestHandleLoadProviders_NoFile(t *testing.T) {
 	server, cleanup := setupAdminTest(t)
 	defer cleanup()
 
+	token := getAuthToken(t, server)
+
 	// Create request without file
 	req := httptest.NewRequest(http.MethodPost, "/admin/api/providers/load", nil)
 	req.Header.Set("Content-Type", "multipart/form-data")
+	addAuthHeader(req, token)
 	rr := httptest.NewRecorder()
 
 	server.router.ServeHTTP(rr, req)
@@ -167,6 +231,8 @@ func TestHandleLoadProviders_FileTooLarge(t *testing.T) {
 	server, cleanup := setupAdminTest(t)
 	defer cleanup()
 
+	token := getAuthToken(t, server)
+
 	// Create a large HCL file (> 1MB)
 	largeHCL := make([]byte, 1<<20+1) // 1MB + 1 byte
 	for i := range largeHCL {
@@ -174,6 +240,7 @@ func TestHandleLoadProviders_FileTooLarge(t *testing.T) {
 	}
 
 	req, _ := createMultipartRequest(t, string(largeHCL))
+	addAuthHeader(req, token)
 	rr := httptest.NewRecorder()
 
 	server.router.ServeHTTP(rr, req)
@@ -191,6 +258,8 @@ func TestHandleLoadProviders_InvalidProvider(t *testing.T) {
 	server, cleanup := setupAdminTest(t)
 	defer cleanup()
 
+	token := getAuthToken(t, server)
+
 	// Invalid provider source (missing namespace)
 	hcl := `
 provider "invalid" {
@@ -200,6 +269,7 @@ provider "invalid" {
 `
 
 	req, _ := createMultipartRequest(t, hcl)
+	addAuthHeader(req, token)
 	rr := httptest.NewRecorder()
 
 	server.router.ServeHTTP(rr, req)
@@ -217,6 +287,8 @@ func TestHandleLoadProviders_InvalidVersion(t *testing.T) {
 	server, cleanup := setupAdminTest(t)
 	defer cleanup()
 
+	token := getAuthToken(t, server)
+
 	// Invalid version format
 	hcl := `
 provider "hashicorp/random" {
@@ -226,6 +298,7 @@ provider "hashicorp/random" {
 `
 
 	req, _ := createMultipartRequest(t, hcl)
+	addAuthHeader(req, token)
 	rr := httptest.NewRecorder()
 
 	server.router.ServeHTTP(rr, req)
@@ -243,6 +316,8 @@ func TestHandleLoadProviders_InvalidPlatform(t *testing.T) {
 	server, cleanup := setupAdminTest(t)
 	defer cleanup()
 
+	token := getAuthToken(t, server)
+
 	// Invalid platform format (missing underscore)
 	hcl := `
 provider "hashicorp/random" {
@@ -252,6 +327,7 @@ provider "hashicorp/random" {
 `
 
 	req, _ := createMultipartRequest(t, hcl)
+	addAuthHeader(req, token)
 	rr := httptest.NewRecorder()
 
 	server.router.ServeHTTP(rr, req)

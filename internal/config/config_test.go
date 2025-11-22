@@ -19,7 +19,7 @@ func TestDefaultConfig(t *testing.T) {
 	assert.Equal(t, "/data/terraform-mirror.db", cfg.Database.Path)
 	assert.Equal(t, 256, cfg.Cache.MemorySizeMB)
 	assert.Equal(t, 8, cfg.Auth.JWTExpirationHours)
-	assert.Equal(t, 12, cfg.Auth.BcryptCost)
+	assert.Equal(t, 12, cfg.Auth.BCryptCost)
 	assert.Equal(t, "info", cfg.Logging.Level)
 	assert.True(t, cfg.Providers.GPGVerificationEnabled)
 	assert.False(t, cfg.Features.AutoDownloadProviders)
@@ -71,6 +71,14 @@ telemetry {
   enabled = false
 }
 
+processor {
+  polling_interval_seconds = 10
+  max_concurrent_jobs = 3
+  retry_attempts = 3
+  retry_delay_seconds = 5
+  worker_shutdown_seconds = 30
+}
+
 providers {
   gpg_verification_enabled = true
   gpg_key_url = "https://www.hashicorp.com/.well-known/pgp-key.txt"
@@ -97,7 +105,7 @@ quota {
 	assert.Equal(t, 512, cfg.Cache.MemorySizeMB)
 	assert.Equal(t, 20, cfg.Cache.DiskSizeGB)
 	assert.Equal(t, 24, cfg.Auth.JWTExpirationHours)
-	assert.Equal(t, 10, cfg.Auth.BcryptCost)
+	assert.Equal(t, 10, cfg.Auth.BCryptCost)
 	assert.Equal(t, "debug", cfg.Logging.Level)
 	assert.Equal(t, "json", cfg.Logging.Format)
 }
@@ -283,7 +291,7 @@ func TestValidateAuth(t *testing.T) {
 			name: "valid config",
 			config: AuthConfig{
 				JWTExpirationHours: 8,
-				BcryptCost:         12,
+				BCryptCost:         12,
 			},
 			shouldError: false,
 		},
@@ -291,7 +299,7 @@ func TestValidateAuth(t *testing.T) {
 			name: "invalid JWT expiration",
 			config: AuthConfig{
 				JWTExpirationHours: 0,
-				BcryptCost:         12,
+				BCryptCost:         12,
 			},
 			shouldError: true,
 			errorMsg:    "jwt_expiration_hours must be at least 1",
@@ -300,7 +308,7 @@ func TestValidateAuth(t *testing.T) {
 			name: "bcrypt cost too low",
 			config: AuthConfig{
 				JWTExpirationHours: 8,
-				BcryptCost:         3,
+				BCryptCost:         3,
 			},
 			shouldError: true,
 			errorMsg:    "bcrypt_cost must be between 4 and 31",
@@ -309,7 +317,7 @@ func TestValidateAuth(t *testing.T) {
 			name: "bcrypt cost too high",
 			config: AuthConfig{
 				JWTExpirationHours: 8,
-				BcryptCost:         32,
+				BCryptCost:         32,
 			},
 			shouldError: true,
 			errorMsg:    "bcrypt_cost must be between 4 and 31",
