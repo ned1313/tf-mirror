@@ -127,30 +127,6 @@ func TestHandleServiceDiscovery(t *testing.T) {
 	assert.Equal(t, "/v1/providers/", response.ProvidersV1)
 }
 
-func TestHandleProviderVersions_NotImplemented(t *testing.T) {
-	srv, cleanup := setupTestServer(t)
-	defer cleanup()
-
-	req := httptest.NewRequest(http.MethodGet, "/v1/providers/hashicorp/aws/versions", nil)
-	w := httptest.NewRecorder()
-
-	srv.Router().ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusNotImplemented, w.Code)
-}
-
-func TestHandleProviderDownload_NotImplemented(t *testing.T) {
-	srv, cleanup := setupTestServer(t)
-	defer cleanup()
-
-	req := httptest.NewRequest(http.MethodGet, "/v1/providers/hashicorp/aws/5.0.0/download/linux/amd64", nil)
-	w := httptest.NewRecorder()
-
-	srv.Router().ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusNotImplemented, w.Code)
-}
-
 func TestHandleLogin_NotImplemented(t *testing.T) {
 	srv, cleanup := setupTestServer(t)
 	defer cleanup()
@@ -163,7 +139,7 @@ func TestHandleLogin_NotImplemented(t *testing.T) {
 	assert.Equal(t, http.StatusNotImplemented, w.Code)
 }
 
-func TestHandleListProviders_NotImplemented(t *testing.T) {
+func TestHandleListProviders_Success(t *testing.T) {
 	srv, cleanup := setupTestServer(t)
 	defer cleanup()
 
@@ -172,7 +148,20 @@ func TestHandleListProviders_NotImplemented(t *testing.T) {
 
 	srv.Router().ServeHTTP(w, req)
 
-	assert.Equal(t, http.StatusNotImplemented, w.Code)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response map[string]interface{}
+	err := json.NewDecoder(w.Body).Decode(&response)
+	require.NoError(t, err)
+
+	// Empty database should return empty array with count of 0
+	providers, ok := response["providers"].([]interface{})
+	require.True(t, ok, "providers should be an array")
+	assert.Empty(t, providers, "providers array should be empty for empty database")
+
+	count, ok := response["count"].(float64) // JSON numbers are float64
+	require.True(t, ok, "count should be a number")
+	assert.Equal(t, float64(0), count, "count should be 0 for empty database")
 }
 
 func TestHandleMetrics_NotImplemented(t *testing.T) {

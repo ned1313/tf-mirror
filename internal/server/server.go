@@ -20,14 +20,18 @@ type Server struct {
 	storage storage.Storage
 	router  *chi.Mux
 	server  *http.Server
+
+	// Repositories
+	providerRepo *database.ProviderRepository
 }
 
 // New creates a new HTTP server instance
 func New(cfg *config.Config, db *database.DB, storage storage.Storage) *Server {
 	s := &Server{
-		config:  cfg,
-		db:      db,
-		storage: storage,
+		config:       cfg,
+		db:           db,
+		storage:      storage,
+		providerRepo: database.NewProviderRepository(db),
 	}
 
 	s.setupRouter()
@@ -60,11 +64,16 @@ func (s *Server) setupRouter() {
 		r.Get("/terraform.json", s.handleServiceDiscovery)
 	})
 
-	// Provider mirror endpoints (public, no auth)
+	// Provider Registry Protocol endpoints (public, no auth)
 	r.Route("/v1/providers", func(r chi.Router) {
 		r.Get("/{namespace}/{type}/versions", s.handleProviderVersions)
 		r.Get("/{namespace}/{type}/{version}/download/{os}/{arch}", s.handleProviderDownload)
 	})
+
+	// Provider Network Mirror Protocol endpoints (public, no auth)
+	// Pattern: /{hostname}/{namespace}/{type}/index.json
+	// Pattern: /{hostname}/{namespace}/{type}/{version}.json
+	r.Get("/*", s.handleMirrorCatchAll)
 
 	// Admin API endpoints (authentication required)
 	r.Route("/admin/api", func(r chi.Router) {
@@ -76,6 +85,7 @@ func (s *Server) setupRouter() {
 		r.Post("/logout", s.handleLogout)
 
 		// Provider management
+		r.Post("/providers/load", s.handleLoadProviders)
 		r.Get("/providers", s.handleListProviders)
 		r.Post("/providers", s.handleUploadProvider)
 		r.Get("/providers/{id}", s.handleGetProvider)

@@ -3,6 +3,8 @@ package server
 import (
 	"encoding/json"
 	"net/http"
+
+	"github.com/ned1313/terraform-mirror/internal/database"
 )
 
 // Health check response
@@ -39,25 +41,7 @@ func (s *Server) handleServiceDiscovery(w http.ResponseWriter, r *http.Request) 
 	json.NewEncoder(w).Encode(response)
 }
 
-// handleProviderVersions lists available versions for a provider
-// TODO: Implement full logic
-func (s *Server) handleProviderVersions(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusNotImplemented)
-	json.NewEncoder(w).Encode(map[string]string{
-		"error": "not implemented yet",
-	})
-}
-
-// handleProviderDownload handles provider download requests
-// TODO: Implement full logic
-func (s *Server) handleProviderDownload(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusNotImplemented)
-	json.NewEncoder(w).Encode(map[string]string{
-		"error": "not implemented yet",
-	})
-}
+// Provider Mirror Protocol handlers are now in provider_mirror.go
 
 // handleLogin handles admin login
 // TODO: Implement full logic with JWT
@@ -82,10 +66,42 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 // handleListProviders lists all providers
 // TODO: Implement full logic
 func (s *Server) handleListProviders(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusNotImplemented)
-	json.NewEncoder(w).Encode(map[string]string{
-		"error": "not implemented yet",
+	ctx := r.Context()
+
+	// Get query parameters for filtering
+	namespace := r.URL.Query().Get("namespace")
+	providerType := r.URL.Query().Get("type")
+
+	// Get all providers from database (with a reasonable limit)
+	providers, err := s.providerRepo.List(ctx, 1000, 0)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "database_error", "Failed to list providers")
+		return
+	}
+
+	// Ensure providers is never nil (empty slice instead)
+	if providers == nil {
+		providers = make([]*database.Provider, 0)
+	}
+
+	// Filter if parameters provided
+	filtered := providers
+	if namespace != "" || providerType != "" {
+		filtered = make([]*database.Provider, 0)
+		for _, p := range providers {
+			if namespace != "" && p.Namespace != namespace {
+				continue
+			}
+			if providerType != "" && p.Type != providerType {
+				continue
+			}
+			filtered = append(filtered, p)
+		}
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"providers": filtered,
+		"count":     len(filtered),
 	})
 }
 
