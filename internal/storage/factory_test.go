@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
+	"github.com/ned1313/terraform-mirror/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/ned1313/terraform-mirror/internal/config"
 )
 
 func TestNewFromConfig_S3(t *testing.T) {

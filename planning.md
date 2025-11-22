@@ -13,7 +13,7 @@ In addition to implementing the protocol, the provider mirror should also have t
 1. Automatically download new providers on demand when requested by a terraform client. The server will download the requested version only. This feature can be disabled by the administrator.
 1. Load a set of predefined providers from a file. The file will include the provider source addresses, architectures, and versions to include.
 
-## Provider Module Mirror
+## Module Mirror
 
 The second benefit is to provide a mirror for Terraform modules from the public registry. The Terraform client doesn't currently support a mirror setting for modules, so we need to take a different approach.
 

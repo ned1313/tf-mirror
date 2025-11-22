@@ -2,9 +2,26 @@
 
 This document tracks the implementation progress for Phase 1 MVP.
 
+## Multi-Phase Project Overview
+
+Terraform Mirror is designed to provide caching proxy capabilities for **both Terraform providers and modules**. The project is being implemented in phases:
+
+- **Phase 1 (Current)**: Provider Network Mirror - Manual provider loading with read-only network mirror protocol
+- **Phase 2 (Future)**: Auto-download providers - Automatic on-demand provider downloads with GPG verification
+- **Phase 3 (Future)**: Module Registry Mirror - Module caching with Terraform Module Registry Protocol implementation
+
+This roadmap focuses exclusively on **Phase 1: Provider Network Mirror**.
+
 ## Phase 1 Goals
 
-Build the foundational infrastructure for Terraform Mirror with manual provider loading capabilities.
+Build the foundational infrastructure for Terraform Mirror with manual provider loading capabilities:
+
+- Single container deployment with Go backend
+- S3-compatible object storage (AWS S3 or MinIO)
+- Provider network mirror protocol (read-only)
+- Admin authentication and basic web UI
+- SQLite metadata database
+- Manual provider loading via HCL definition files
 
 ## Implementation Tasks
 
@@ -245,4 +262,43 @@ Phase 1 is complete when:
 - **Week 9**: Testing and bug fixes
 - **Week 10**: Documentation and deployment setup
 
+**Phase 1 Total: ~10 weeks**
+
+## Future Phases (Not in Current Roadmap)
+
+### Phase 2: Auto-Download Providers
+- Automatic on-demand provider downloads from registry.terraform.io
+- GPG signature verification
+- Checksum validation
+- Background download job processing
+- Rate limiting and quota management
+- Mirror of mirror support (chain caching)
+
+**Estimated Timeline: 4-6 weeks**
+
+### Phase 3: Module Registry Mirror
+- Terraform Module Registry Protocol implementation
+- Module download endpoints (`/modules/*`)
+- Module version discovery
+- Auto-download modules on demand
+- Module metadata caching
+- Module source address rewriting support
+- Additional database models for module tracking
+
+**Estimated Timeline: 6-8 weeks**
+
+### Phase 4: Advanced Features (Future Consideration)
+- Multi-region replication
+- High availability / clustering
+- Advanced caching strategies
+- Webhook notifications for new versions
+- Provider/module pre-warming based on usage patterns
+- SSO integration (OIDC/SAML)
+- Role-based access control (RBAC)
+- API rate limiting per consumer
+- Metrics and alerting (Prometheus/Grafana)
+
+---
+
+**Note**: This roadmap focuses on Phase 1. Phase 2 and Phase 3 will have their own detailed roadmaps once Phase 1 is complete and deployed.
 **Total: ~10 weeks for Phase 1 MVP**
