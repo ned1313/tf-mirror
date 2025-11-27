@@ -115,19 +115,19 @@ Build the foundational infrastructure for Terraform Mirror with manual provider 
 - [x] Middleware for protecting admin endpoints
 - [x] Session tracking with IP address and user agent
 
-#### Admin API
+#### Admin API ✅
 
 - [x] Login/logout endpoints
 - [x] Provider definition upload endpoint (HCL file → parse → load)
 - [x] Provider listing endpoint
-- [x] Provider deletion endpoint
+- [x] Provider get/update/delete endpoints
 - [x] Job status endpoint (list and detail)
-- [ ] Provider deprecation/blocking
-- [ ] Job retry endpoint
-- [ ] Storage statistics endpoint
-- [ ] Audit log endpoint
-- [ ] Configuration viewing
-- [ ] Backup trigger endpoint
+- [x] Provider deprecation/blocking (via update endpoint)
+- [x] Job retry endpoint (POST /admin/api/jobs/{id}/retry)
+- [x] Storage statistics endpoint (GET /admin/api/stats/storage)
+- [x] Audit log endpoint (GET /admin/api/stats/audit)
+- [x] Configuration viewing (GET /admin/api/config - sanitized)
+- [x] Backup trigger endpoint (POST /admin/api/backup)
 
 #### HTTP Server ✅
 
