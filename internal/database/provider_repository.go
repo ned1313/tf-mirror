@@ -237,3 +237,45 @@ func (r *ProviderRepository) Count(ctx context.Context) (int64, error) {
 	}
 	return count, nil
 }
+
+// StorageStats represents storage statistics
+type StorageStats struct {
+	TotalProviders   int64 `json:"total_providers"`
+	TotalSizeBytes   int64 `json:"total_size_bytes"`
+	UniqueNamespaces int64 `json:"unique_namespaces"`
+	UniqueTypes      int64 `json:"unique_types"`
+	UniqueVersions   int64 `json:"unique_versions"`
+	DeprecatedCount  int64 `json:"deprecated_count"`
+	BlockedCount     int64 `json:"blocked_count"`
+}
+
+// GetStorageStats returns storage statistics
+func (r *ProviderRepository) GetStorageStats(ctx context.Context) (*StorageStats, error) {
+	query := `
+		SELECT 
+			COUNT(*) as total_providers,
+			COALESCE(SUM(size_bytes), 0) as total_size_bytes,
+			COUNT(DISTINCT namespace) as unique_namespaces,
+			COUNT(DISTINCT type) as unique_types,
+			COUNT(DISTINCT namespace || '/' || type || '/' || version) as unique_versions,
+			SUM(CASE WHEN deprecated = 1 THEN 1 ELSE 0 END) as deprecated_count,
+			SUM(CASE WHEN blocked = 1 THEN 1 ELSE 0 END) as blocked_count
+		FROM providers
+	`
+
+	stats := &StorageStats{}
+	err := r.db.conn.QueryRowContext(ctx, query).Scan(
+		&stats.TotalProviders,
+		&stats.TotalSizeBytes,
+		&stats.UniqueNamespaces,
+		&stats.UniqueTypes,
+		&stats.UniqueVersions,
+		&stats.DeprecatedCount,
+		&stats.BlockedCount,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get storage stats: %w", err)
+	}
+
+	return stats, nil
+}

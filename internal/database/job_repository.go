@@ -326,3 +326,28 @@ func (r *JobRepository) CountByStatus(ctx context.Context, status string) (int64
 
 	return count, nil
 }
+
+// ResetFailedItems resets all failed items in a job back to pending status
+func (r *JobRepository) ResetFailedItems(ctx context.Context, jobID int64) (int64, error) {
+	query := `
+		UPDATE download_job_items
+		SET status = 'pending', 
+		    error_message = NULL,
+		    started_at = NULL,
+		    completed_at = NULL,
+		    retry_count = retry_count + 1
+		WHERE job_id = ? AND status = 'failed'
+	`
+
+	result, err := r.db.conn.ExecContext(ctx, query, jobID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to reset failed items: %w", err)
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	return rows, nil
+}

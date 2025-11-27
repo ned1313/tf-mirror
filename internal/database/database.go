@@ -99,6 +99,30 @@ func (db *DB) BeginTx(ctx context.Context, opts *sql.TxOptions) (*sql.Tx, error)
 	return db.conn.BeginTx(ctx, opts)
 }
 
+// Backup creates a backup of the database to the specified path
+// For SQLite, this uses the VACUUM INTO command to create a complete copy
+func (db *DB) Backup(ctx context.Context, backupPath string) error {
+	// Ensure backup directory exists
+	dir := filepath.Dir(backupPath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create backup directory: %w", err)
+	}
+
+	// Remove existing backup file if it exists
+	if err := os.Remove(backupPath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to remove existing backup: %w", err)
+	}
+
+	// Use VACUUM INTO to create a consistent backup
+	query := fmt.Sprintf("VACUUM INTO '%s'", backupPath)
+	if _, err := db.conn.ExecContext(ctx, query); err != nil {
+		return fmt.Errorf("failed to create backup: %w", err)
+	}
+
+	log.Printf("Database backup created: %s", backupPath)
+	return nil
+}
+
 // migrate runs database migrations
 func (db *DB) migrate() error {
 	// Create migrations table if it doesn't exist
