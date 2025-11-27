@@ -157,6 +157,10 @@ Build the foundational infrastructure for Terraform Mirror with manual provider 
 - [x] Status endpoint for monitoring processor state
 - [x] Comprehensive test coverage
 - [x] Worker shutdown timeout handling
+- [x] Provider download integration (registry client → storage → database)
+- [x] Skip existing providers (deduplication)
+- [x] Mock registry client for testing
+- [x] ListPending query for efficient job polling
 
 ### Frontend Components
 
@@ -205,7 +209,7 @@ Build the foundational infrastructure for Terraform Mirror with manual provider 
 - [x] Provider service tests (8 tests, 87.7% coverage)
 - [x] Server protocol tests (all tests passing)
 - [x] Auth service tests (password hashing, JWT generation/validation)
-- [x] Processor service tests (2 tests pending download_jobs table from Step 13)
+- [x] Processor service tests (4 tests with mock registry client)
 - [ ] Cache tests
 - [x] Job processing tests (integrated with processor)
 

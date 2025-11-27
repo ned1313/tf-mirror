@@ -26,6 +26,12 @@ const (
 	RetryDelay = 1 * time.Second
 )
 
+// RegistryDownloader is an interface for downloading providers from a registry
+type RegistryDownloader interface {
+	// DownloadProviderComplete performs the complete download workflow
+	DownloadProviderComplete(ctx context.Context, namespace, providerType, version, os, arch string) *DownloadResult
+}
+
 // RegistryClient handles communication with the Terraform Registry API
 type RegistryClient struct {
 	httpClient *http.Client

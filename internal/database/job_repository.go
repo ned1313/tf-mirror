@@ -125,6 +125,49 @@ func (r *JobRepository) List(ctx context.Context, limit, offset int) ([]*Downloa
 	return jobs, rows.Err()
 }
 
+// ListPending retrieves pending jobs ordered by creation time
+func (r *JobRepository) ListPending(ctx context.Context, limit int) ([]*DownloadJob, error) {
+	query := `
+		SELECT id, user_id, source_type, source_data, status, progress, total_items, 
+		       completed_items, failed_items, error_message, created_at, started_at, completed_at
+		FROM download_jobs
+		WHERE status = 'pending'
+		ORDER BY created_at ASC
+		LIMIT ?
+	`
+
+	rows, err := r.db.conn.QueryContext(ctx, query, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list pending jobs: %w", err)
+	}
+	defer rows.Close()
+
+	var jobs []*DownloadJob
+	for rows.Next() {
+		var job DownloadJob
+		if err := rows.Scan(
+			&job.ID,
+			&job.UserID,
+			&job.SourceType,
+			&job.SourceData,
+			&job.Status,
+			&job.Progress,
+			&job.TotalItems,
+			&job.CompletedItems,
+			&job.FailedItems,
+			&job.ErrorMessage,
+			&job.CreatedAt,
+			&job.StartedAt,
+			&job.CompletedAt,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan job: %w", err)
+		}
+		jobs = append(jobs, &job)
+	}
+
+	return jobs, rows.Err()
+}
+
 // Update updates a job's status and counters
 func (r *JobRepository) Update(ctx context.Context, job *DownloadJob) error {
 	query := `

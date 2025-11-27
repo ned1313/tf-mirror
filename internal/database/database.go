@@ -20,14 +20,21 @@ type DB struct {
 
 // New creates a new database connection and runs migrations
 func New(dbPath string) (*DB, error) {
-	// Ensure directory exists
-	dir := filepath.Dir(dbPath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create database directory: %w", err)
+	// Handle in-memory database for testing
+	connString := dbPath
+	if dbPath == ":memory:" {
+		// Use shared cache mode for in-memory databases to allow multiple connections
+		connString = "file::memory:?cache=shared"
+	} else {
+		// Ensure directory exists for file-based databases
+		dir := filepath.Dir(dbPath)
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return nil, fmt.Errorf("failed to create database directory: %w", err)
+		}
 	}
 
 	// Open database connection
-	conn, err := sql.Open("sqlite", dbPath)
+	conn, err := sql.Open("sqlite", connString)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}

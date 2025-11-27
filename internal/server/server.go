@@ -51,7 +51,9 @@ func New(cfg *config.Config, db *database.DB, storage storage.Storage) *Server {
 		RetryDelay:         time.Duration(cfg.Processor.RetryDelaySeconds) * time.Second,
 		WorkerShutdownTime: time.Duration(cfg.Processor.WorkerShutdownSeconds) * time.Second,
 	}
-	processorService := processor.NewService(processorConfig, db)
+	// Default hostname for provider storage keys
+	hostname := "registry.terraform.io"
+	processorService := processor.NewService(processorConfig, db, storage, hostname)
 
 	s := &Server{
 		config:           cfg,
