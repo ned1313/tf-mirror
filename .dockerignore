@@ -1,0 +1,50 @@
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Build artifacts
+bin/
+dist/
+terraform-mirror
+*.exe
+*.test
+*.out
+
+# Test files
+coverage.txt
+coverage.html
+*_test.go
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Local development
+*.db
+*.db-wal
+*.db-shm
+terraform-mirror-dev.db
+config.local.hcl
+storage/
+cache/
+
+# Frontend development files (we only need the built dist)
+web/node_modules/
+
+# Docker compose files (not needed in image)
+docker-compose*.yml
+
+# Deployment files (not needed in image)
+deployments/
+!deployments/docker/Dockerfile
+
+# Other
+.DS_Store
+Thumbs.db

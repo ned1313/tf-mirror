@@ -22,9 +22,16 @@ services:
       - terraform-mirror-data:/data
       - terraform-mirror-cache:/var/cache/tf-mirror
     depends_on:
-      - minio
+      minio:
+        condition: service_healthy
     networks:
       - terraform-mirror
+    healthcheck:
+      test: ["CMD", "/app/terraform-mirror", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
 
   minio:
     image: minio/minio:latest

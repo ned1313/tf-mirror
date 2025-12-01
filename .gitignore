@@ -19,7 +19,8 @@ go.work
 # Build output
 /bin/
 /dist/
-terraform-mirror
+/terraform-mirror
+/terraform-mirror.exe
 
 # IDE
 .vscode/

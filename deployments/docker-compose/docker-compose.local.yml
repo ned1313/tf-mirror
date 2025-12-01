@@ -1,0 +1,32 @@
+# Local development docker-compose with filesystem storage
+# Usage: docker-compose -f docker-compose.local.yml up --build
+
+services:
+  terraform-mirror:
+    image: terraform-mirror:latest
+    build:
+      context: ../..
+      dockerfile: deployments/docker/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - TFM_SERVER_PORT=8080
+      - TFM_STORAGE_TYPE=local
+      - TFM_STORAGE_ENDPOINT=/data/storage
+      - TFM_DATABASE_PATH=/data/terraform-mirror.db
+      - TFM_CACHE_MEMORY_SIZE_MB=256
+      - TFM_CACHE_DISK_SIZE_GB=5
+      - TFM_CACHE_PATH=/data/cache
+      - TFM_ADMIN_USERNAME=admin
+      - TFM_ADMIN_PASSWORD=admin123
+    volumes:
+      - terraform-mirror-data:/data
+    healthcheck:
+      test: ["CMD", "/app/terraform-mirror", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+volumes:
+  terraform-mirror-data:

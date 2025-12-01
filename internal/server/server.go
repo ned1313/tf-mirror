@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -103,6 +106,18 @@ func (s *Server) setupRouter() {
 		r.Get("/{namespace}/{type}/versions", s.handleProviderVersions)
 		r.Get("/{namespace}/{type}/{version}/download/{os}/{arch}", s.handleProviderDownload)
 	})
+
+	// Admin UI static files - served from web/dist directory
+	// Must be before the catch-all route
+	webDir := s.findWebDir()
+	if webDir != "" {
+		log.Printf("Serving admin UI from: %s", webDir)
+		r.Route("/admin", func(r chi.Router) {
+			r.Get("/*", s.serveAdminUI(webDir))
+		})
+	} else {
+		log.Printf("Warning: Admin UI static files not found, admin UI will not be available")
+	}
 
 	// Provider Network Mirror Protocol endpoints (public, no auth)
 	// Pattern: /{hostname}/{namespace}/{type}/index.json
@@ -206,4 +221,63 @@ func (s *Server) Shutdown(ctx context.Context) error {
 // Router returns the underlying Chi router (useful for testing)
 func (s *Server) Router() *chi.Mux {
 	return s.router
+}
+
+// findWebDir looks for the web/dist directory in common locations
+func (s *Server) findWebDir() string {
+	// List of potential locations for the web/dist directory
+	paths := []string{
+		"web/dist",       // Running from project root
+		"./web/dist",     // Explicit current directory
+		"/app/web/dist",  // Docker container path
+		"../web/dist",    // Running from cmd/terraform-mirror
+		"../../web/dist", // Running from internal/server
+	}
+
+	// Get executable path and check relative to it
+	if execPath, err := os.Executable(); err == nil {
+		execDir := filepath.Dir(execPath)
+		paths = append(paths, filepath.Join(execDir, "web/dist"))
+		paths = append(paths, filepath.Join(execDir, "../web/dist"))
+	}
+
+	for _, p := range paths {
+		absPath, err := filepath.Abs(p)
+		if err != nil {
+			continue
+		}
+		if info, err := os.Stat(absPath); err == nil && info.IsDir() {
+			// Check if index.html exists
+			indexPath := filepath.Join(absPath, "index.html")
+			if _, err := os.Stat(indexPath); err == nil {
+				return absPath
+			}
+		}
+	}
+
+	return ""
+}
+
+// serveAdminUI creates a handler that serves the admin UI static files
+func (s *Server) serveAdminUI(webDir string) http.HandlerFunc {
+	fileServer := http.FileServer(http.Dir(webDir))
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Get the path after /admin
+		path := strings.TrimPrefix(r.URL.Path, "/admin")
+		if path == "" {
+			path = "/"
+		}
+
+		// Check if the requested file exists
+		filePath := filepath.Join(webDir, path)
+		if info, err := os.Stat(filePath); err == nil && !info.IsDir() {
+			// Serve the file directly
+			http.StripPrefix("/admin", fileServer).ServeHTTP(w, r)
+			return
+		}
+
+		// For SPA routing - serve index.html for all other routes
+		http.ServeFile(w, r, filepath.Join(webDir, "index.html"))
+	}
 }
