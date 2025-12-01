@@ -137,6 +137,7 @@ func (s *Service) LoadFromDefinitions(ctx context.Context, defs *ProviderDefinit
 					Filename:  downloadResult.Info.Filename,
 					Shasum:    downloadResult.Info.Shasum,
 					S3Key:     s3Key,
+					SizeBytes: int64(len(downloadResult.Data)),
 				}
 
 				if err := providerRepo.Create(ctx, provider); err != nil {

@@ -185,11 +185,11 @@ func (r *ProviderRepository) List(ctx context.Context, limit, offset int) ([]*Pr
 func (r *ProviderRepository) Update(ctx context.Context, p *Provider) error {
 	query := `
 		UPDATE providers
-		SET deprecated = ?, blocked = ?, updated_at = CURRENT_TIMESTAMP
+		SET deprecated = ?, blocked = ?, size_bytes = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?
 	`
 
-	result, err := r.db.conn.ExecContext(ctx, query, p.Deprecated, p.Blocked, p.ID)
+	result, err := r.db.conn.ExecContext(ctx, query, p.Deprecated, p.Blocked, p.SizeBytes, p.ID)
 	if err != nil {
 		return fmt.Errorf("failed to update provider: %w", err)
 	}

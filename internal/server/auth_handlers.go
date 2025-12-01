@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"net/http"
@@ -8,6 +9,14 @@ import (
 	"time"
 
 	"github.com/ned1313/terraform-mirror/internal/database"
+)
+
+// Context key types for user information
+type contextKey string
+
+const (
+	userIDKey   contextKey = "userID"
+	usernameKey contextKey = "username"
 )
 
 // LoginRequest represents the login request body
@@ -114,6 +123,11 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
+	// Log successful login
+	s.logAuditEvent(r, "login", "session", jti, true, "", map[string]interface{}{
+		"username": user.Username,
+	})
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(response)
@@ -144,6 +158,11 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "revoke_error", "Failed to revoke session")
 		return
 	}
+
+	// Log successful logout
+	s.logAuditEvent(r, "logout", "session", claims.ID, true, "", map[string]interface{}{
+		"username": claims.Username,
+	})
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
@@ -190,9 +209,10 @@ func (s *Server) authMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		// TODO: Add user ID and username to request context
-		// For now, just pass through
+		// Add user ID and username to request context
+		ctx := context.WithValue(r.Context(), userIDKey, claims.UserID)
+		ctx = context.WithValue(ctx, usernameKey, claims.Username)
 
-		next.ServeHTTP(w, r)
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

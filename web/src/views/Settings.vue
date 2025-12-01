@@ -106,6 +106,30 @@
                 </dd>
               </div>
             </dl>
+            <div class="mt-4 pt-4 border-t border-gray-200">
+              <button
+                @click="handleRecalculate"
+                :disabled="recalculating"
+                class="inline-flex items-center px-3 py-1.5 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <svg
+                  v-if="recalculating"
+                  class="animate-spin -ml-0.5 mr-2 h-4 w-4 text-gray-500"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                <svg v-else class="-ml-0.5 mr-2 h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                {{ recalculating ? 'Recalculating...' : 'Recalculate Sizes' }}
+              </button>
+              <span v-if="recalculateResult" :class="recalculateResult.success ? 'text-green-600' : 'text-red-600'" class="ml-3 text-sm">
+                {{ recalculateResult.message }}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -115,33 +139,43 @@
             <h2 class="text-lg font-medium text-gray-900">Database Backup</h2>
           </div>
           <div class="p-6">
-            <p class="text-sm text-gray-600 mb-4">
-              Create a backup of the database. Backups are stored in the configured backup directory.
-            </p>
-            <div class="flex items-center space-x-4">
-              <button
-                @click="handleBackup"
-                :disabled="backingUp"
-                class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <svg
-                  v-if="backingUp"
-                  class="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
-                  fill="none"
-                  viewBox="0 0 24 24"
+            <template v-if="statsStore.config?.database?.backup_enabled">
+              <p class="text-sm text-gray-600 mb-4">
+                Create a backup of the database. Backups are stored in the configured backup directory.
+              </p>
+              <div class="flex items-center space-x-4">
+                <button
+                  @click="handleBackup"
+                  :disabled="backingUp"
+                  class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  <svg
+                    v-if="backingUp"
+                    class="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  <svg v-else class="-ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                  </svg>
+                  {{ backingUp ? 'Creating Backup...' : 'Create Backup' }}
+                </button>
+                <span v-if="backupResult" :class="backupResult.success ? 'text-green-600' : 'text-red-600'" class="text-sm">
+                  {{ backupResult.message }}
+                </span>
+              </div>
+            </template>
+            <template v-else>
+              <div class="flex items-center space-x-3 text-gray-500">
+                <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>
-                <svg v-else class="-ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
-                </svg>
-                {{ backingUp ? 'Creating Backup...' : 'Create Backup' }}
-              </button>
-              <span v-if="backupResult" :class="backupResult.success ? 'text-green-600' : 'text-red-600'" class="text-sm">
-                {{ backupResult.message }}
-              </span>
-            </div>
+                <span class="text-sm">Database backup is disabled in configuration. Set <code class="bg-gray-100 px-1 py-0.5 rounded text-xs">backup_enabled = true</code> in the database block to enable.</span>
+              </div>
+            </template>
           </div>
         </div>
 
@@ -190,6 +224,9 @@ const statsStore = useStatsStore()
 const backingUp = ref(false)
 const backupResult = ref<{ success: boolean; message: string } | null>(null)
 
+const recalculating = ref(false)
+const recalculateResult = ref<{ success: boolean; message: string } | null>(null)
+
 const apiBaseUrl = import.meta.env.VITE_API_URL || window.location.origin
 
 function getLogLevelClass(level: string): string {
@@ -200,6 +237,27 @@ function getLogLevelClass(level: string): string {
     error: 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800',
   }
   return classes[level] || classes.info
+}
+
+async function handleRecalculate() {
+  recalculating.value = true
+  recalculateResult.value = null
+  try {
+    const result = await statsStore.recalculateStats()
+    recalculateResult.value = {
+      success: true,
+      message: `Updated ${result.updated} providers`
+    }
+    // Refresh storage stats after recalculating
+    await statsStore.fetchStorageStats()
+  } catch (error) {
+    recalculateResult.value = {
+      success: false,
+      message: error instanceof Error ? error.message : 'Recalculation failed'
+    }
+  } finally {
+    recalculating.value = false
+  }
 }
 
 async function handleBackup() {

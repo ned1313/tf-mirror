@@ -16,7 +16,14 @@
             </svg>
           </div>
           <div class="ml-4">
-            <p class="text-sm font-medium text-gray-500">Total Providers</p>
+            <p class="text-sm font-medium text-gray-500 flex items-center gap-1">
+              Total Providers
+              <span class="cursor-help" title="Total number of provider binaries stored (each OS/architecture combination counts separately)">
+                <svg class="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </span>
+            </p>
             <p class="text-2xl font-semibold text-gray-900">
               {{ statsStore.loading ? '...' : statsStore.storageStats?.total_providers ?? 0 }}
             </p>
@@ -32,7 +39,14 @@
             </svg>
           </div>
           <div class="ml-4">
-            <p class="text-sm font-medium text-gray-500">Total Versions</p>
+            <p class="text-sm font-medium text-gray-500 flex items-center gap-1">
+              Total Versions
+              <span class="cursor-help" title="Unique provider versions (namespace/type/version combinations, regardless of OS/architecture)">
+                <svg class="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </span>
+            </p>
             <p class="text-2xl font-semibold text-gray-900">
               {{ statsStore.loading ? '...' : statsStore.storageStats?.unique_versions ?? 0 }}
             </p>
@@ -48,7 +62,14 @@
             </svg>
           </div>
           <div class="ml-4">
-            <p class="text-sm font-medium text-gray-500">Storage Used</p>
+            <p class="text-sm font-medium text-gray-500 flex items-center gap-1">
+              Storage Used
+              <span class="cursor-help" title="Total disk space used by all provider binaries">
+                <svg class="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </span>
+            </p>
             <p class="text-2xl font-semibold text-gray-900">
               {{ statsStore.loading ? '...' : statsStore.storageStats?.total_size_human ?? '0 B' }}
             </p>
@@ -64,7 +85,14 @@
             </svg>
           </div>
           <div class="ml-4">
-            <p class="text-sm font-medium text-gray-500">Active Jobs</p>
+            <p class="text-sm font-medium text-gray-500 flex items-center gap-1">
+              Active Jobs
+              <span class="cursor-help" title="Number of jobs currently pending or running">
+                <svg class="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </span>
+            </p>
             <p class="text-2xl font-semibold text-gray-900">
               {{ jobsStore.loading ? '...' : activeJobCount }}
             </p>

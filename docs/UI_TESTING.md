@@ -65,22 +65,22 @@ export default defineConfig({
 ## Testing Checklist
 
 ### Authentication
-- [ ] **Login page renders** - Navigate to `/login`
-- [ ] **Invalid credentials show error** - Try wrong username/password
-- [ ] **Successful login redirects** - Login with `admin`/`admin123`
-- [ ] **Auth token persists** - Refresh page, should stay logged in
-- [ ] **Logout works** - Click logout, redirects to login
+- [X] **Login page renders** - Navigate to `/login`
+- [X] **Invalid credentials show error** - Try wrong username/password
+- [X] **Successful login redirects** - Login with `admin`/`admin123`
+- [X] **Auth token persists** - Refresh page, should stay logged in
+- [X] **Logout works** - Click logout, redirects to login
 
 ### Dashboard (Admin page)
-- [ ] **Stats cards display** - Total providers, versions, storage size, jobs
-- [ ] **Recent activity shows** - Audit log entries (may be empty initially)
-- [ ] **Active jobs display** - Running/pending jobs (may be empty)
-- [ ] **Navigation works** - Sidebar links navigate correctly
-- [ ] **Quick stats in sidebar** - Provider count and storage size
+- [X] **Stats cards display** - Total providers, versions, storage size, jobs
+- [X] **Recent activity shows** - Audit log entries (may be empty initially)
+- [X] **Active jobs display** - Running/pending jobs (may be empty)
+- [X] **Navigation works** - Sidebar links navigate correctly
+- [X] **Quick stats in sidebar** - Provider count and storage size
 
 ### Providers Page
-- [ ] **Provider list loads** - Shows empty state or provider list
-- [ ] **Upload HCL button works** - Opens upload modal
+- [X] **Provider list loads** - Shows empty state or provider list
+- [X] **Upload HCL button works** - Opens upload modal
 - [ ] **Search/filter works** - Try searching if providers exist
 - [ ] **Status filter works** - Filter by Active/Deprecated/Blocked
 - [ ] **Namespace filter works** - Filter by namespace dropdown

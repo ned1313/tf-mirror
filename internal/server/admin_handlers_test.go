@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -285,6 +286,158 @@ func TestHandleRetryJob(t *testing.T) {
 		server.router.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+}
+
+func TestHandleCancelJob(t *testing.T) {
+	server, cleanup := setupAdminTest(t)
+	defer cleanup()
+
+	// Get auth token
+	token := getAuthToken(t, server)
+
+	t.Run("cancel pending job", func(t *testing.T) {
+		// Create a pending job
+		jobRepo := database.NewJobRepository(server.db)
+		job := &database.DownloadJob{
+			SourceType:     "hcl",
+			SourceData:     "test",
+			Status:         "pending",
+			TotalItems:     2,
+			CompletedItems: 0,
+			FailedItems:    0,
+		}
+		err := jobRepo.Create(context.Background(), job)
+		require.NoError(t, err)
+
+		req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/admin/api/jobs/%d/cancel", job.ID), nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+
+		server.router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var result map[string]interface{}
+		err = json.NewDecoder(w.Body).Decode(&result)
+		require.NoError(t, err)
+
+		assert.Equal(t, "Job cancelled", result["message"])
+
+		// Verify job status is cancelled
+		updatedJob, err := jobRepo.GetByID(context.Background(), job.ID)
+		require.NoError(t, err)
+		assert.Equal(t, "cancelled", updatedJob.Status)
+	})
+
+	t.Run("cancel running job", func(t *testing.T) {
+		// Create a running job
+		jobRepo := database.NewJobRepository(server.db)
+		job := &database.DownloadJob{
+			SourceType:     "hcl",
+			SourceData:     "test",
+			Status:         "running",
+			TotalItems:     2,
+			CompletedItems: 0,
+			FailedItems:    0,
+		}
+		err := jobRepo.Create(context.Background(), job)
+		require.NoError(t, err)
+
+		req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/admin/api/jobs/%d/cancel", job.ID), nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+
+		server.router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var result map[string]interface{}
+		err = json.NewDecoder(w.Body).Decode(&result)
+		require.NoError(t, err)
+
+		assert.Equal(t, "Job cancelled", result["message"])
+
+		// Verify job status is cancelled
+		updatedJob, err := jobRepo.GetByID(context.Background(), job.ID)
+		require.NoError(t, err)
+		assert.Equal(t, "cancelled", updatedJob.Status)
+	})
+
+	t.Run("cancel completed job fails", func(t *testing.T) {
+		// Create a completed job
+		jobRepo := database.NewJobRepository(server.db)
+		job := &database.DownloadJob{
+			SourceType:     "hcl",
+			SourceData:     "test",
+			Status:         "completed",
+			TotalItems:     1,
+			CompletedItems: 1,
+		}
+		err := jobRepo.Create(context.Background(), job)
+		require.NoError(t, err)
+
+		req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/admin/api/jobs/%d/cancel", job.ID), nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+
+		server.router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+
+		var result map[string]interface{}
+		err = json.NewDecoder(w.Body).Decode(&result)
+		require.NoError(t, err)
+
+		assert.Equal(t, "invalid_status", result["error"])
+	})
+
+	t.Run("cancel failed job fails", func(t *testing.T) {
+		// Create a failed job
+		jobRepo := database.NewJobRepository(server.db)
+		job := &database.DownloadJob{
+			SourceType:  "hcl",
+			SourceData:  "test",
+			Status:      "failed",
+			TotalItems:  1,
+			FailedItems: 1,
+		}
+		err := jobRepo.Create(context.Background(), job)
+		require.NoError(t, err)
+
+		req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/admin/api/jobs/%d/cancel", job.ID), nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+
+		server.router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+
+		var result map[string]interface{}
+		err = json.NewDecoder(w.Body).Decode(&result)
+		require.NoError(t, err)
+
+		assert.Equal(t, "invalid_status", result["error"])
+	})
+
+	t.Run("cancel non-existent job", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/admin/api/jobs/999/cancel", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+
+		server.router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+
+	t.Run("cancel invalid job id", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/admin/api/jobs/invalid/cancel", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+
+		server.router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
 	})
 }
 

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -101,6 +102,70 @@ func convertJobToResponse(job *database.DownloadJob, items []*database.DownloadJ
 	}
 
 	return response
+}
+
+// logAuditEvent creates an audit log entry for admin actions
+func (s *Server) logAuditEvent(r *http.Request, action, resourceType, resourceID string, success bool, errorMsg string, metadata map[string]interface{}) {
+	// Get user ID from context (set by auth middleware)
+	var userID int64
+	if id, ok := r.Context().Value(userIDKey).(int64); ok {
+		userID = id
+	}
+
+	// Build the audit entry
+	entry := &database.AdminAction{
+		Action:       action,
+		ResourceType: resourceType,
+		Success:      success,
+	}
+
+	if userID > 0 {
+		entry.UserID.Int64 = userID
+		entry.UserID.Valid = true
+	}
+
+	if resourceID != "" {
+		entry.ResourceID.String = resourceID
+		entry.ResourceID.Valid = true
+	}
+
+	// Get IP address
+	ip := r.RemoteAddr
+	if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
+		ip = forwarded
+	}
+	entry.IPAddress.String = ip
+	entry.IPAddress.Valid = true
+
+	// Get User-Agent
+	if ua := r.Header.Get("User-Agent"); ua != "" {
+		entry.UserAgent.String = ua
+		entry.UserAgent.Valid = true
+	}
+
+	if errorMsg != "" {
+		entry.ErrorMessage.String = errorMsg
+		entry.ErrorMessage.Valid = true
+	}
+
+	// Encode metadata as JSON if provided
+	if metadata != nil {
+		if data, err := json.Marshal(metadata); err == nil {
+			entry.Metadata.String = string(data)
+			entry.Metadata.Valid = true
+		}
+	}
+
+	// Log asynchronously to not slow down the response
+	// Use background context since request context may be cancelled
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := s.auditRepo.Log(ctx, entry); err != nil {
+			// Just log the error, don't fail the request
+			fmt.Printf("Failed to create audit log: %v\n", err)
+		}
+	}()
 }
 
 // handleHealth returns the health status of the server
@@ -256,9 +321,19 @@ func (s *Server) handleUpdateProvider(w http.ResponseWriter, r *http.Request) {
 
 	// Save changes
 	if err := s.providerRepo.Update(r.Context(), provider); err != nil {
+		s.logAuditEvent(r, "update_provider", "provider", idStr, false, err.Error(), nil)
 		respondError(w, http.StatusInternalServerError, "database_error", "Failed to update provider")
 		return
 	}
+
+	// Log successful update
+	s.logAuditEvent(r, "update_provider", "provider", idStr, true, "", map[string]interface{}{
+		"namespace":  provider.Namespace,
+		"type":       provider.Type,
+		"version":    provider.Version,
+		"deprecated": provider.Deprecated,
+		"blocked":    provider.Blocked,
+	})
 
 	respondJSON(w, http.StatusOK, provider)
 }
@@ -295,9 +370,18 @@ func (s *Server) handleDeleteProvider(w http.ResponseWriter, r *http.Request) {
 
 	// Delete from database
 	if err := s.providerRepo.Delete(r.Context(), id); err != nil {
+		s.logAuditEvent(r, "delete_provider", "provider", idStr, false, err.Error(), nil)
 		respondError(w, http.StatusInternalServerError, "database_error", "Failed to delete provider")
 		return
 	}
+
+	// Log successful deletion
+	s.logAuditEvent(r, "delete_provider", "provider", idStr, true, "", map[string]interface{}{
+		"namespace": provider.Namespace,
+		"type":      provider.Type,
+		"version":   provider.Version,
+		"platform":  provider.Platform,
+	})
 
 	respondJSON(w, http.StatusOK, map[string]string{
 		"message": "Provider deleted successfully",
@@ -442,14 +526,80 @@ func (s *Server) handleRetryJob(w http.ResponseWriter, r *http.Request) {
 	job.CompletedAt.Valid = false
 
 	if err := s.jobRepo.Update(r.Context(), job); err != nil {
+		s.logAuditEvent(r, "retry_job", "job", idStr, false, err.Error(), nil)
 		respondError(w, http.StatusInternalServerError, "database_error", "Failed to update job")
 		return
 	}
+
+	// Log successful retry
+	s.logAuditEvent(r, "retry_job", "job", idStr, true, "", map[string]interface{}{
+		"reset_count": resetCount,
+	})
 
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"message":     "Job retry started",
 		"reset_count": resetCount,
 		"job_id":      jobID,
+	})
+}
+
+// handleCancelJob cancels a pending or running job
+// POST /admin/api/jobs/{id}/cancel
+func (s *Server) handleCancelJob(w http.ResponseWriter, r *http.Request) {
+	// Get job ID from URL
+	idStr := chi.URLParam(r, "id")
+	jobID, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid_id", "Invalid job ID")
+		return
+	}
+
+	// Get job from database
+	job, err := s.jobRepo.GetByID(r.Context(), jobID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "database_error", "Failed to get job")
+		return
+	}
+	if job == nil {
+		respondError(w, http.StatusNotFound, "not_found", "Job not found")
+		return
+	}
+
+	// Only allow cancelling pending or running jobs
+	if job.Status != "pending" && job.Status != "running" {
+		respondError(w, http.StatusBadRequest, "invalid_status",
+			"Can only cancel jobs that are pending or running")
+		return
+	}
+
+	// If job is running, try to cancel it in the processor
+	wasActive := false
+	if job.Status == "running" {
+		wasActive = s.processorService.CancelJob(jobID)
+	}
+
+	// Update job status to cancelled
+	job.Status = "cancelled"
+	job.ErrorMessage.String = "Job cancelled by user"
+	job.ErrorMessage.Valid = true
+	job.CompletedAt.Time = time.Now()
+	job.CompletedAt.Valid = true
+
+	if err := s.jobRepo.Update(r.Context(), job); err != nil {
+		s.logAuditEvent(r, "cancel_job", "job", idStr, false, err.Error(), nil)
+		respondError(w, http.StatusInternalServerError, "database_error", "Failed to update job")
+		return
+	}
+
+	// Log successful cancellation
+	s.logAuditEvent(r, "cancel_job", "job", idStr, true, "", map[string]interface{}{
+		"was_active": wasActive,
+	})
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"message":    "Job cancelled",
+		"job_id":     jobID,
+		"was_active": wasActive,
 	})
 }
 
@@ -599,6 +749,58 @@ func (s *Server) handleAuditLogs(w http.ResponseWriter, r *http.Request) {
 		Total:  len(entries),
 		Limit:  limit,
 		Offset: offset,
+	})
+}
+
+// RecalculateStatsResponse represents the response from recalculating stats
+type RecalculateStatsResponse struct {
+	Message  string `json:"message"`
+	Updated  int    `json:"updated"`
+	Errors   int    `json:"errors"`
+	NewTotal int64  `json:"new_total_bytes"`
+}
+
+// handleRecalculateStats recalculates storage sizes from actual files
+// POST /admin/api/stats/recalculate
+func (s *Server) handleRecalculateStats(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Get all providers (use a large limit to get all)
+	providers, err := s.providerRepo.List(ctx, 10000, 0)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "list_error", "Failed to list providers: "+err.Error())
+		return
+	}
+
+	updated := 0
+	errors := 0
+	var totalBytes int64
+
+	for _, p := range providers {
+		// Get actual file size from storage
+		size, err := s.storage.GetObjectSize(ctx, p.S3Key)
+		if err != nil {
+			errors++
+			continue
+		}
+
+		// Update if size is different
+		if p.SizeBytes != size {
+			p.SizeBytes = size
+			if err := s.providerRepo.Update(ctx, p); err != nil {
+				errors++
+				continue
+			}
+			updated++
+		}
+		totalBytes += size
+	}
+
+	respondJSON(w, http.StatusOK, RecalculateStatsResponse{
+		Message:  fmt.Sprintf("Recalculated storage sizes for %d providers", len(providers)),
+		Updated:  updated,
+		Errors:   errors,
+		NewTotal: totalBytes,
 	})
 }
 
@@ -789,6 +991,13 @@ func (s *Server) handleTriggerBackup(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+
+	// Log successful backup
+	s.logAuditEvent(r, "trigger_backup", "database", "", true, "", map[string]interface{}{
+		"backup_path": response.BackupPath,
+		"s3_key":      response.S3Key,
+		"size_bytes":  response.SizeBytes,
+	})
 
 	respondJSON(w, http.StatusOK, response)
 }

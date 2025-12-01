@@ -71,7 +71,7 @@ func validateServer(cfg *ServerConfig) error {
 }
 
 func validateStorage(cfg *StorageConfig) error {
-	validTypes := []string{"s3", "filesystem"}
+	validTypes := []string{"s3", "local"}
 	if !contains(validTypes, cfg.Type) {
 		return fmt.Errorf("storage type must be one of %v, got %s", validTypes, cfg.Type)
 	}

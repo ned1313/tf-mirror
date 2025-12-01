@@ -105,6 +105,31 @@ export const useJobsStore = defineStore('jobs', () => {
     }
   }
 
+  async function cancelJob(id: number): Promise<boolean> {
+    loading.value = true
+    error.value = null
+    
+    try {
+      await jobsApi.cancel(id)
+      
+      // Refresh job details if viewing this job
+      if (currentJob.value?.id === id) {
+        await fetchJob(id)
+      }
+      
+      // Refresh list
+      await fetchJobs()
+      
+      return true
+    } catch (err: unknown) {
+      const axiosError = err as { response?: { data?: { message?: string } } }
+      error.value = axiosError.response?.data?.message || 'Failed to cancel job'
+      return false
+    } finally {
+      loading.value = false
+    }
+  }
+
   function nextPage() {
     pagination.value.offset += pagination.value.limit
     fetchJobs()
@@ -144,6 +169,7 @@ export const useJobsStore = defineStore('jobs', () => {
     fetchJobs,
     fetchJob,
     retryJob,
+    cancelJob,
     nextPage,
     prevPage,
     setPageSize,

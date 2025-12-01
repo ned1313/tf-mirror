@@ -131,6 +131,7 @@ func (s *Server) setupRouter() {
 			r.Get("/jobs", s.handleListJobs)
 			r.Get("/jobs/{id}", s.handleGetJob)
 			r.Post("/jobs/{id}/retry", s.handleRetryJob)
+			r.Post("/jobs/{id}/cancel", s.handleCancelJob)
 
 			// Processor status
 			r.Get("/processor/status", s.handleProcessorStatus)
@@ -138,6 +139,7 @@ func (s *Server) setupRouter() {
 			// Statistics
 			r.Get("/stats/storage", s.handleStorageStats)
 			r.Get("/stats/audit", s.handleAuditLogs)
+			r.Post("/stats/recalculate", s.handleRecalculateStats)
 
 			// Configuration
 			r.Get("/config", s.handleGetConfig)

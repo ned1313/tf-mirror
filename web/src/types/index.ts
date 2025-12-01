@@ -63,7 +63,7 @@ export interface JobItem {
 export interface Job {
   id: number
   source_type: string
-  status: 'pending' | 'running' | 'completed' | 'failed'
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
   progress: number
   total_items: number
   completed_items: number

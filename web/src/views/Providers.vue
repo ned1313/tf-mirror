@@ -56,7 +56,7 @@
     </div>
 
     <!-- Providers table -->
-    <div class="bg-white rounded-lg shadow overflow-hidden">
+    <div class="bg-white rounded-lg shadow">
       <div v-if="providersStore.loading" class="p-8 text-center text-gray-500">
         <svg class="animate-spin h-8 w-8 mx-auto text-indigo-600" fill="none" viewBox="0 0 24 24">
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
@@ -96,7 +96,7 @@
           </tr>
         </thead>
         <tbody class="bg-white divide-y divide-gray-200">
-          <tr v-for="provider in filteredProviders" :key="provider.ID" class="hover:bg-gray-50">
+          <tr v-for="(provider, index) in filteredProviders" :key="provider.ID" class="hover:bg-gray-50">
             <td class="px-6 py-4 whitespace-nowrap">
               <div class="flex items-center">
                 <div>
@@ -140,7 +140,10 @@
                   </button>
                   <div
                     v-if="openDropdown === String(provider.ID)"
-                    class="absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10"
+                    :class="[
+                      'absolute right-0 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50',
+                      index >= filteredProviders.length - 3 ? 'bottom-full mb-2' : 'mt-2'
+                    ]"
                   >
                     <div class="py-1">
                       <button

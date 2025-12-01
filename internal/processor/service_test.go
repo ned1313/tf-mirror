@@ -395,3 +395,77 @@ func TestService_MaxConcurrentJobs(t *testing.T) {
 		}
 	}
 }
+
+func TestService_CancelJob(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+
+	service, _ := setupTestService(t, db)
+	jobRepo := database.NewJobRepository(db)
+
+	t.Run("cancel job not in activeJobs returns false", func(t *testing.T) {
+		// Create a pending job (not in activeJobs)
+		job := &database.DownloadJob{
+			SourceType:     "api",
+			SourceData:     `{"namespace":"hashicorp","type":"aws"}`,
+			Status:         "pending",
+			TotalItems:     1,
+			CompletedItems: 0,
+			FailedItems:    0,
+		}
+		err := jobRepo.Create(context.Background(), job)
+		if err != nil {
+			t.Fatalf("Failed to create job: %v", err)
+		}
+
+		// CancelJob returns false when job is not in activeJobs
+		cancelled := service.CancelJob(job.ID)
+		if cancelled {
+			t.Error("Expected CancelJob to return false for job not in activeJobs")
+		}
+	})
+
+	t.Run("cancel running job with active context", func(t *testing.T) {
+		// Create a running job
+		job := &database.DownloadJob{
+			SourceType:     "api",
+			SourceData:     `{"namespace":"hashicorp","type":"random"}`,
+			Status:         "running",
+			TotalItems:     1,
+			CompletedItems: 0,
+			FailedItems:    0,
+		}
+		err := jobRepo.Create(context.Background(), job)
+		if err != nil {
+			t.Fatalf("Failed to create job: %v", err)
+		}
+
+		// Simulate an active job by adding to activeJobs map
+		ctx, cancel := context.WithCancel(context.Background())
+		service.mu.Lock()
+		service.activeJobs[job.ID] = cancel
+		service.mu.Unlock()
+
+		// Cancel the job
+		cancelled := service.CancelJob(job.ID)
+		if !cancelled {
+			t.Error("Expected CancelJob to return true for active job")
+		}
+
+		// Verify the context was cancelled
+		select {
+		case <-ctx.Done():
+			// Good, context was cancelled
+		default:
+			t.Error("Expected context to be cancelled")
+		}
+	})
+
+	t.Run("cancel non-existent job returns false", func(t *testing.T) {
+		// Try to cancel a job that doesn't exist in activeJobs
+		cancelled := service.CancelJob(99999)
+		if cancelled {
+			t.Error("Expected CancelJob to return false for non-existent job")
+		}
+	})
+}

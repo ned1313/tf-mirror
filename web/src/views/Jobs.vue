@@ -114,7 +114,18 @@
               </div>
             </div>
 
-            <div class="ml-4 flex-shrink-0">
+            <div class="ml-4 flex-shrink-0 flex space-x-2">
+              <button
+                v-if="job.status === 'pending' || job.status === 'running'"
+                @click="handleCancel(job)"
+                :disabled="cancelling === job.id"
+                class="inline-flex items-center px-3 py-1.5 border border-red-300 shadow-sm text-xs font-medium rounded text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
+              >
+                <svg class="mr-1.5 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+                {{ cancelling === job.id ? 'Cancelling...' : 'Cancel' }}
+              </button>
               <button
                 v-if="job.status === 'failed'"
                 @click="handleRetry(job)"
@@ -296,6 +307,7 @@ const statusFilter = ref('')
 const showDetailsModal = ref(false)
 const selectedJob = ref<Job | null>(null)
 const retrying = ref<number | null>(null)
+const cancelling = ref<number | null>(null)
 
 const tabs = computed(() => [
   { label: 'All', value: '', count: jobsStore.jobs.length },
@@ -303,6 +315,7 @@ const tabs = computed(() => [
   { label: 'Pending', value: 'pending', count: jobsStore.jobs.filter(j => j.status === 'pending').length },
   { label: 'Completed', value: 'completed', count: jobsStore.jobs.filter(j => j.status === 'completed').length },
   { label: 'Failed', value: 'failed', count: jobsStore.jobs.filter(j => j.status === 'failed').length },
+  { label: 'Cancelled', value: 'cancelled', count: jobsStore.jobs.filter(j => j.status === 'cancelled').length },
 ])
 
 const filteredJobs = computed(() => {
@@ -316,6 +329,7 @@ function getStatusBadgeClass(status: Job['status']): string {
     running: 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800',
     completed: 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800',
     failed: 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800',
+    cancelled: 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800',
   }
   return classes[status] || 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800'
 }
@@ -325,6 +339,7 @@ function getItemStatusClass(status: string): string {
     pending: 'text-xs text-yellow-600',
     completed: 'text-xs text-green-600',
     failed: 'text-xs text-red-600',
+    cancelled: 'text-xs text-gray-600',
   }
   return classes[status] || 'text-xs text-gray-600'
 }
@@ -363,6 +378,15 @@ async function handleRetry(job: Job) {
     await jobsStore.retryJob(job.id)
   } finally {
     retrying.value = null
+  }
+}
+
+async function handleCancel(job: Job) {
+  cancelling.value = job.id
+  try {
+    await jobsStore.cancelJob(job.id)
+  } finally {
+    cancelling.value = null
   }
 }
 

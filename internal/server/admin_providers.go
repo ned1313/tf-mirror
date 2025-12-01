@@ -183,6 +183,14 @@ func (s *Server) handleLoadProviders(w http.ResponseWriter, r *http.Request) {
 		Total: len(defs.Providers),
 	}
 
+	// Log successful provider load
+	s.logAuditEvent(r, "load_providers", "job", fmt.Sprintf("%d", job.ID), true, "", map[string]interface{}{
+		"total_providers": len(defs.Providers),
+		"total_items":     totalItems,
+		"success":         stats.Success,
+		"failed":          stats.Failed,
+	})
+
 	// Return success response
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)

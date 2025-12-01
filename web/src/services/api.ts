@@ -115,6 +115,11 @@ export const jobsApi = {
   retry: async (id: number): Promise<{ message: string; reset_count: number; job_id: number }> => {
     const response = await api.post(`/jobs/${id}/retry`)
     return response.data
+  },
+
+  cancel: async (id: number): Promise<{ message: string; job_id: number; was_active: boolean }> => {
+    const response = await api.post(`/jobs/${id}/cancel`)
+    return response.data
   }
 }
 
@@ -133,6 +138,11 @@ export const statsApi = {
     resource_id?: string
   }): Promise<AuditLogResponse> => {
     const response = await api.get<AuditLogResponse>('/stats/audit', { params })
+    return response.data
+  },
+
+  recalculate: async (): Promise<{ message: string; updated: number; errors: number; new_total_bytes: number }> => {
+    const response = await api.post<{ message: string; updated: number; errors: number; new_total_bytes: number }>('/stats/recalculate')
     return response.data
   }
 }

@@ -127,6 +127,28 @@ func (s *Service) Stop() error {
 	return nil
 }
 
+// CancelJob cancels a running job by its ID
+// Returns true if the job was actively running and cancelled, false if not found
+func (s *Service) CancelJob(jobID int64) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if cancel, exists := s.activeJobs[jobID]; exists {
+		log.Printf("Cancelling job %d", jobID)
+		cancel()
+		return true
+	}
+	return false
+}
+
+// IsJobActive returns true if the job is currently being processed
+func (s *Service) IsJobActive(jobID int64) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, exists := s.activeJobs[jobID]
+	return exists
+}
+
 // pollLoop continuously checks for pending jobs
 func (s *Service) pollLoop(ctx context.Context) {
 	defer close(s.doneCh)

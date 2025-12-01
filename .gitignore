@@ -76,3 +76,4 @@ web/.vite/
 # Temporary files
 *.tmp
 /tmp/
+storage/

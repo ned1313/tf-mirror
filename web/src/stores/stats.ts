@@ -110,6 +110,21 @@ export const useStatsStore = defineStore('stats', () => {
     }
   }
 
+  async function recalculateStats(): Promise<{ updated: number; errors: number; new_total_bytes: number }> {
+    loading.value = true
+    error.value = null
+    
+    try {
+      return await statsApi.recalculate()
+    } catch (err: unknown) {
+      const axiosError = err as { response?: { data?: { message?: string } } }
+      error.value = axiosError.response?.data?.message || 'Failed to recalculate stats'
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
   function clearError() {
     error.value = null
   }
@@ -132,6 +147,7 @@ export const useStatsStore = defineStore('stats', () => {
     fetchConfig,
     fetchProcessorStatus,
     triggerBackup,
+    recalculateStats,
     clearError
   }
 })
