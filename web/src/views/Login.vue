@@ -59,39 +59,32 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
+const route = useRoute()
+const authStore = useAuthStore()
+
 const username = ref('')
 const password = ref('')
-const loading = ref(false)
-const error = ref('')
+
+const loading = computed(() => authStore.loading)
+const error = computed(() => authStore.error)
 
 const handleLogin = async () => {
-  loading.value = true
-  error.value = ''
+  authStore.clearError()
   
-  try {
-    // TODO: Implement actual API call
-    // const response = await fetch('/admin/api/login', {
-    //   method: 'POST',
-    //   headers: { 'Content-Type': 'application/json' },
-    //   body: JSON.stringify({
-    //     username: username.value,
-    //     password: password.value
-    //   })
-    // })
-    
-    // Placeholder - remove when API is implemented
-    setTimeout(() => {
-      localStorage.setItem('auth_token', 'placeholder-token')
-      router.push('/admin')
-    }, 1000)
-  } catch (err) {
-    error.value = 'Login failed. Please check your credentials.'
-  } finally {
-    loading.value = false
+  const success = await authStore.login({
+    username: username.value,
+    password: password.value
+  })
+  
+  if (success) {
+    // Redirect to the originally requested page, or admin dashboard
+    const redirect = route.query.redirect as string || '/admin'
+    router.push(redirect)
   }
 }
 </script>
