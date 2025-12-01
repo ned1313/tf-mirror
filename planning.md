@@ -57,11 +57,13 @@ Admins will require authentication. We'll use a simple username/password login. 
   - `POST /admin/api/providers/load` - Load providers from HCL file
   - `GET /admin/api/stats/storage` - Storage statistics
   - `GET /admin/api/stats/audit` - Audit logs
+  - `POST /admin/api/stats/recalculate` - Recalculate storage sizes
   - `GET /admin/api/config` - Server configuration (sanitized)
   - `POST /admin/api/backup` - Trigger database backup
   - `GET /admin/api/jobs` - List download jobs
   - `GET /admin/api/jobs/{id}` - Get job details
   - `POST /admin/api/jobs/{id}/retry` - Retry failed job
+  - `POST /admin/api/jobs/{id}/cancel` - Cancel running/pending job
   - `GET /admin/api/processor/status` - Background processor status
   - `POST /admin/api/processor/start` - Start processor
   - `POST /admin/api/processor/stop` - Stop processor
@@ -92,19 +94,21 @@ Admins will require authentication. We'll use a simple username/password login. 
 ### Pending
 
 #### High Priority
+
 - [ ] Module Registry Protocol implementation
 - [ ] Auto-download providers on demand
-- [ ] Frontend: Connect to running backend and test UI
 - [ ] Docker containerization
 - [ ] Production deployment configuration
 
 #### Medium Priority
+
 - [ ] Module storage and management
 - [ ] Rate limiting
 - [ ] Caching layer (memory + disk)
 - [ ] Telemetry/observability
 
 #### Low Priority
+
 - [ ] SSO integration
 - [ ] Multiple admin users
 - [ ] Advanced search/filtering
