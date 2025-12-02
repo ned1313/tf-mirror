@@ -16,6 +16,7 @@ import (
 	"github.com/ned1313/terraform-mirror/internal/server"
 	"github.com/ned1313/terraform-mirror/internal/storage"
 	"github.com/ned1313/terraform-mirror/internal/version"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func main() {
@@ -56,6 +57,21 @@ func main() {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 	defer db.Close()
+
+	// Create initial admin user from environment variables if provided
+	adminUsername := os.Getenv("TFM_ADMIN_USERNAME")
+	adminPassword := os.Getenv("TFM_ADMIN_PASSWORD")
+	if adminUsername != "" && adminPassword != "" {
+		// Hash the password before storing
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(adminPassword), 12)
+		if err != nil {
+			log.Printf("Warning: Failed to hash admin password: %v", err)
+		} else {
+			if err := database.CreateInitialAdminUser(db, adminUsername, string(hashedPassword)); err != nil {
+				log.Printf("Warning: Failed to create initial admin user: %v", err)
+			}
+		}
+	}
 
 	// Initialize storage
 	ctx := context.Background()
