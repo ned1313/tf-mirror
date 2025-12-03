@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/ned1313/terraform-mirror/internal/auth"
+	"github.com/ned1313/terraform-mirror/internal/cache"
 	"github.com/ned1313/terraform-mirror/internal/config"
 	"github.com/ned1313/terraform-mirror/internal/database"
 	"github.com/ned1313/terraform-mirror/internal/processor"
@@ -24,6 +25,7 @@ type Server struct {
 	config  *config.Config
 	db      *database.DB
 	storage storage.Storage
+	cache   cache.Cache
 	router  *chi.Mux
 	server  *http.Server
 	logger  *log.Logger
@@ -40,6 +42,11 @@ type Server struct {
 
 // New creates a new HTTP server instance
 func New(cfg *config.Config, db *database.DB, storage storage.Storage) *Server {
+	return NewWithCache(cfg, db, storage, nil)
+}
+
+// NewWithCache creates a new HTTP server instance with an optional cache
+func NewWithCache(cfg *config.Config, db *database.DB, storage storage.Storage, c cache.Cache) *Server {
 	// Create auth service
 	authService := auth.NewService(
 		cfg.Auth.JWTSecret,
@@ -59,10 +66,16 @@ func New(cfg *config.Config, db *database.DB, storage storage.Storage) *Server {
 	hostname := "registry.terraform.io"
 	processorService := processor.NewService(processorConfig, db, storage, hostname)
 
+	// Use NoOp cache if none provided
+	if c == nil {
+		c = cache.NewNoOpCache()
+	}
+
 	s := &Server{
 		config:           cfg,
 		db:               db,
 		storage:          storage,
+		cache:            c,
 		logger:           log.Default(),
 		authService:      authService,
 		processorService: processorService,
@@ -154,7 +167,9 @@ func (s *Server) setupRouter() {
 			// Statistics
 			r.Get("/stats/storage", s.handleStorageStats)
 			r.Get("/stats/audit", s.handleAuditLogs)
+			r.Get("/stats/cache", s.handleCacheStats)
 			r.Post("/stats/recalculate", s.handleRecalculateStats)
+			r.Post("/stats/cache/clear", s.handleClearCache)
 
 			// Configuration
 			r.Get("/config", s.handleGetConfig)
@@ -212,6 +227,13 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	// Stop the processor first to prevent new job processing
 	if err := s.processorService.Stop(); err != nil {
 		s.logger.Printf("Error stopping processor: %v", err)
+	}
+
+	// Close the cache
+	if s.cache != nil {
+		if err := s.cache.Close(); err != nil {
+			s.logger.Printf("Error closing cache: %v", err)
+		}
 	}
 
 	// Shutdown the HTTP server

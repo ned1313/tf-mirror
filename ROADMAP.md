@@ -66,11 +66,11 @@ Build the foundational infrastructure for Terraform Mirror with manual provider 
 - [x] Comprehensive testing (28 tests, 57.9% coverage)
 
 #### Cache Layer
-- [ ] In-memory LRU cache
-- [ ] Disk-based cache
-- [ ] Two-tier cache coordinator
-- [ ] Cache invalidation logic
-- [ ] TTL management
+- [x] In-memory LRU cache
+- [x] Disk-based cache
+- [x] Two-tier cache coordinator
+- [x] Cache invalidation logic
+- [x] TTL management
 
 #### Provider Mirror Protocol ✅
 - [x] Service discovery endpoint (`/.well-known/terraform.json`)
@@ -213,7 +213,7 @@ Build the foundational infrastructure for Terraform Mirror with manual provider 
 - [x] Server protocol tests (all tests passing)
 - [x] Auth service tests (password hashing, JWT generation/validation)
 - [x] Processor service tests (4 tests with mock registry client)
-- [ ] Cache tests
+- [x] Cache tests (25 tests - memory, disk, tiered)
 - [x] Job processing tests (integrated with processor)
 
 #### Integration Tests
@@ -244,7 +244,7 @@ Build the foundational infrastructure for Terraform Mirror with manual provider 
 
 ### Deployment
 
-- [ ] Multi-stage Dockerfile optimization
+- [x] Multi-stage Dockerfile optimization
 - [ ] Kubernetes manifests
   - [ ] Deployment
   - [ ] Service
@@ -277,13 +277,14 @@ Phase 1 is complete when:
 10. ✅ Terraform client can download cached providers
 11. ✅ Admin can view job progress via API
 12. ✅ Admin can view storage statistics
-13. ✅ Admin can view audit logs
-14. ✅ Admin UI is functional (all views working)
-15. [ ] All tests pass (>80% coverage)
-16. [ ] Container builds successfully
-17. [ ] Docker Compose deployment works
-18. [ ] Kubernetes deployment works
-19. [ ] Documentation is complete
+14. ✅ Admin can view audit logs
+15. ✅ Admin UI is functional (all views working)
+16. ✅ Cache layer is implemented
+17. [ ] All tests pass (>80% coverage)
+18. ✅ Container builds successfully
+19. ✅ Docker Compose deployment works
+20. [ ] Kubernetes deployment works
+21. [ ] Documentation is complete
 
 ## Next Steps (Immediate)
 
@@ -300,9 +301,9 @@ Phase 1 is complete when:
 11. ✅ Create admin authentication (login/logout with JWT and session management)
 12. ✅ Implement background job processor for provider loading
 13. ✅ Build admin UI (all views: Dashboard, Providers, Jobs, Audit Logs, Settings)
-14. **Next: Docker containerization and deployment setup**
-15. Implement cache layer (in-memory + disk)
-16. Complete remaining documentation
+14. ✅ Docker containerization and deployment setup
+15. ✅ Implement cache layer (in-memory LRU + disk-based + two-tier coordinator)
+16. **Next: Complete remaining documentation**
 17. Implement auto-download providers on demand (Phase 2)
 
 ## Timeline Estimate

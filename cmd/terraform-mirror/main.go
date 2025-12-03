@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/ned1313/terraform-mirror/internal/cache"
 	"github.com/ned1313/terraform-mirror/internal/config"
 	"github.com/ned1313/terraform-mirror/internal/database"
 	"github.com/ned1313/terraform-mirror/internal/server"
@@ -81,8 +82,24 @@ func main() {
 	}
 	defer store.Close()
 
+	// Initialize cache
+	var cacheInstance cache.Cache
+	if cfg.Cache.MemorySizeMB > 0 || (cfg.Cache.DiskPath != "" && cfg.Cache.DiskSizeGB > 0) {
+		cacheInstance, err = cache.NewFromConfig(cfg.Cache)
+		if err != nil {
+			log.Printf("Warning: Failed to initialize cache, running without cache: %v", err)
+			cacheInstance = cache.NewNoOpCache()
+		} else {
+			log.Printf("Cache initialized: %dMB memory, %dGB disk at %s", 
+				cfg.Cache.MemorySizeMB, cfg.Cache.DiskSizeGB, cfg.Cache.DiskPath)
+		}
+	} else {
+		log.Printf("Cache disabled (no memory or disk size configured)")
+		cacheInstance = cache.NewNoOpCache()
+	}
+
 	// Initialize server
-	srv := server.New(cfg, db, store)
+	srv := server.NewWithCache(cfg, db, store, cacheInstance)
 
 	// Start server in goroutine
 	go func() {

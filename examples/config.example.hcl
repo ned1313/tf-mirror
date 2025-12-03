@@ -40,14 +40,22 @@ database {
 }
 
 cache {
-  # In-memory cache size in MB
+  # In-memory LRU cache size in MB
+  # Memory cache is faster but limited in size
+  # Set to 0 to disable memory caching
+  # Environment variable: TFM_CACHE_MEMORY_SIZE_MB
   memory_size_mb = 256
   
   # Disk cache location and size
+  # Disk cache provides larger capacity but slower access
+  # Set disk_size_gb to 0 to disable disk caching
+  # Environment variables: TFM_CACHE_DISK_PATH, TFM_CACHE_DISK_SIZE_GB
   disk_path = "/var/cache/tf-mirror"
   disk_size_gb = 10
   
-  # Cache TTL in seconds
+  # Cache TTL in seconds (default: 1 hour)
+  # Items older than this are automatically removed
+  # Environment variable: TFM_CACHE_TTL_SECONDS
   ttl_seconds = 3600
 }
 

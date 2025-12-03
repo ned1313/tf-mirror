@@ -14,9 +14,11 @@ services:
       - TFM_STORAGE_TYPE=local
       - TFM_STORAGE_ENDPOINT=/data/storage
       - TFM_DATABASE_PATH=/data/terraform-mirror.db
+      # Cache configuration
       - TFM_CACHE_MEMORY_SIZE_MB=256
       - TFM_CACHE_DISK_SIZE_GB=5
-      - TFM_CACHE_PATH=/data/cache
+      - TFM_CACHE_DISK_PATH=/data/cache
+      - TFM_CACHE_TTL_SECONDS=3600
       - TFM_ADMIN_USERNAME=admin
       - TFM_ADMIN_PASSWORD=admin123
     volumes:

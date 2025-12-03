@@ -1,9 +1,12 @@
 package server
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -80,6 +83,22 @@ func (s *Server) handleProviderVersions(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// Build cache key for this versions response
+	cacheKey := fmt.Sprintf("versions:%s/%s", namespace, providerType)
+
+	// Try to get from cache first
+	if reader, contentType, found := s.cache.Get(r.Context(), cacheKey); found {
+		data, err := io.ReadAll(reader)
+		reader.Close()
+		if err == nil {
+			w.Header().Set("Content-Type", contentType)
+			w.Header().Set("X-Cache", "HIT")
+			w.WriteHeader(http.StatusOK)
+			w.Write(data)
+			return
+		}
+	}
+
 	// Query database for all versions of this provider
 	providers, err := s.providerRepo.ListVersions(r.Context(), namespace, providerType)
 	if err != nil {
@@ -103,7 +122,22 @@ func (s *Server) handleProviderVersions(w http.ResponseWriter, r *http.Request) 
 		Versions: versionMap,
 	}
 
-	respondJSON(w, http.StatusOK, response)
+	// Serialize response
+	responseData, err := json.Marshal(response)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "serialization_error", "failed to serialize response")
+		return
+	}
+
+	// Cache the response (versions change less frequently, cache longer)
+	cacheTTL := time.Duration(5) * time.Minute
+	s.cache.Set(r.Context(), cacheKey, bytes.NewReader(responseData), "application/json", int64(len(responseData)), cacheTTL)
+
+	// Send response
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Cache", "MISS")
+	w.WriteHeader(http.StatusOK)
+	w.Write(responseData)
 }
 
 // handleProviderDownload handles provider download requests
@@ -123,6 +157,22 @@ func (s *Server) handleProviderDownload(w http.ResponseWriter, r *http.Request) 
 	// Platform format is "os_arch"
 	platform := os + "_" + arch
 
+	// Build cache key for this download response
+	cacheKey := fmt.Sprintf("download:%s/%s/%s/%s", namespace, providerType, version, platform)
+
+	// Try to get from cache first
+	if reader, contentType, found := s.cache.Get(r.Context(), cacheKey); found {
+		data, err := io.ReadAll(reader)
+		reader.Close()
+		if err == nil {
+			w.Header().Set("Content-Type", contentType)
+			w.Header().Set("X-Cache", "HIT")
+			w.WriteHeader(http.StatusOK)
+			w.Write(data)
+			return
+		}
+	}
+
 	// Query database for this specific provider version
 	provider, err := s.providerRepo.GetByIdentity(r.Context(), namespace, providerType, version, platform)
 	if err != nil {
@@ -136,8 +186,9 @@ func (s *Server) handleProviderDownload(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Generate presigned URL for the provider binary
-	downloadURL, err := s.storage.GetPresignedURL(r.Context(), provider.S3Key, 3600) // 1 hour expiry
+	// Generate presigned URL for the provider binary (shorter expiry for cache efficiency)
+	presignExpiry := time.Duration(30) * time.Minute // 30 minute expiry
+	downloadURL, err := s.storage.GetPresignedURL(r.Context(), provider.S3Key, presignExpiry)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "storage_error", "failed to generate download URL")
 		return
@@ -145,7 +196,7 @@ func (s *Server) handleProviderDownload(w http.ResponseWriter, r *http.Request) 
 
 	// Generate presigned URL for SHA256SUMS file
 	shasumsPath := provider.S3Key + "_SHA256SUMS"
-	shasumsURL, err := s.storage.GetPresignedURL(r.Context(), shasumsPath, 3600)
+	shasumsURL, err := s.storage.GetPresignedURL(r.Context(), shasumsPath, presignExpiry)
 	if err != nil {
 		// SHA256SUMS file might not exist yet, log but continue
 		shasumsURL = ""
@@ -153,7 +204,7 @@ func (s *Server) handleProviderDownload(w http.ResponseWriter, r *http.Request) 
 
 	// Generate presigned URL for SHA256SUMS.sig file
 	sigPath := provider.S3Key + "_SHA256SUMS.sig"
-	sigURL, err := s.storage.GetPresignedURL(r.Context(), sigPath, 3600)
+	sigURL, err := s.storage.GetPresignedURL(r.Context(), sigPath, presignExpiry)
 	if err != nil {
 		// Signature file might not exist yet, log but continue
 		sigURL = ""
@@ -174,5 +225,20 @@ func (s *Server) handleProviderDownload(w http.ResponseWriter, r *http.Request) 
 		},
 	}
 
-	respondJSON(w, http.StatusOK, response)
+	// Serialize response
+	responseData, err := json.Marshal(response)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "serialization_error", "failed to serialize response")
+		return
+	}
+
+	// Cache the response (with TTL shorter than presigned URL expiry)
+	cacheTTL := time.Duration(25) * time.Minute // Cache for 25 minutes (less than presigned URL expiry)
+	s.cache.Set(r.Context(), cacheKey, bytes.NewReader(responseData), "application/json", int64(len(responseData)), cacheTTL)
+
+	// Send response
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Cache", "MISS")
+	w.WriteHeader(http.StatusOK)
+	w.Write(responseData)
 }
