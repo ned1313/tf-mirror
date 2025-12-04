@@ -130,7 +130,7 @@ done:
 		items, _ := jobRepo.GetItems(ctx, job.ID)
 		for _, it := range items {
 			t.Logf("Item %s/%s %s (%s): %s - %s",
-				it.Namespace, it.Type, it.Version, it.Platform, it.Status, it.Error)
+				it.Namespace, it.Type, it.Version, it.Platform, it.Status, it.ErrorMessage.String)
 		}
 		t.Errorf("Expected job status 'completed', got '%s'", completedJob.Status)
 	}
@@ -273,7 +273,7 @@ func TestIntegration_FullProviderLoadFlow(t *testing.T) {
 					jobItems, _ := jobRepo.GetItems(context.Background(), job.ID)
 					for _, it := range jobItems {
 						t.Logf("  %s/%s %s (%s): %s - %s",
-							it.Namespace, it.Type, it.Version, it.Platform, it.Status, it.Error)
+							it.Namespace, it.Type, it.Version, it.Platform, it.Status, it.ErrorMessage.String)
 					}
 				}
 
