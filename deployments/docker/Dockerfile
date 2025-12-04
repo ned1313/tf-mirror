@@ -31,7 +31,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     ./cmd/terraform-mirror
 
 # Stage 3: Final runtime image
-FROM alpine:3.20
+FROM alpine:3.23
 
 # Add ca-certificates for HTTPS and create non-root user
 RUN apk --no-cache add ca-certificates && \
