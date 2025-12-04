@@ -1,12 +1,14 @@
-# golangci-lint configuration
+# golangci-lint configuration v2
 # https://golangci-lint.run/usage/configuration/
+
+version: "2"
 
 run:
   timeout: 5m
 
 linters:
-  # Disable all linters and enable only specific ones
-  disable-all: true
+  # Disable all default linters
+  default: none
   enable:
     - errcheck
     - gosimple
@@ -17,30 +19,26 @@ linters:
     - gofmt
     - misspell
 
-linters-settings:
-  errcheck:
-    # Don't check for unchecked errors in type assertions
-    check-type-assertions: false
-    # Don't check for unchecked blank identifier assignments
-    check-blank: false
-    # Ignore these functions
-    exclude-functions:
-      - (io.Closer).Close
-      - (*os.File).Close
-      - (net/http.ResponseWriter).Write
-  
-  govet:
-    enable-all: false
-    enable:
-      - printf
-      - shadow
-      - structtag
-  
-  gofmt:
-    simplify: true
-  
-  misspell:
-    locale: US
+  settings:
+    errcheck:
+      # Don't check for unchecked errors in type assertions
+      check-type-assertions: false
+      # Don't check for unchecked blank identifier assignments
+      check-blank: false
+      # Ignore these functions
+      exclude-functions:
+        - (io.Closer).Close
+        - (*os.File).Close
+        - (net/http.ResponseWriter).Write
+    
+    govet:
+      enable:
+        - printf
+        - shadow
+        - structtag
+    
+    misspell:
+      locale: US
 
 issues:
   # Exclude some linters from running on test files
