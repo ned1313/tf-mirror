@@ -1,0 +1,52 @@
+name: Helm Release
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  release:
+    name: Release Helm Chart
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.14.0
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Update Chart version
+        run: |
+          sed -i "s/^version:.*/version: ${{ steps.version.outputs.version }}/" deployments/helm/terraform-mirror/Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"${{ steps.version.outputs.version }}\"/" deployments/helm/terraform-mirror/Chart.yaml
+
+      - name: Package Helm chart
+        run: |
+          helm package deployments/helm/terraform-mirror -d .helm-packages
+
+      - name: Upload Helm chart to release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: .helm-packages/*.tgz
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push Helm chart to OCI registry
+        run: |
+          helm push .helm-packages/*.tgz oci://ghcr.io/${{ github.repository_owner }}/charts

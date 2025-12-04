@@ -255,11 +255,14 @@ Build the foundational infrastructure for Terraform Mirror with manual provider 
   - [x] Chart.yaml
   - [x] values.yaml
   - [x] Templates
-- [ ] CI/CD pipeline
-  - [ ] Build automation
-  - [ ] Test execution
-  - [ ] Docker image build
-  - [ ] Image registry push
+- [x] CI/CD pipeline (.github/workflows/)
+  - [x] Build automation (ci.yml)
+  - [x] Test execution (ci.yml)
+  - [x] Docker image build (ci.yml)
+  - [x] Image registry push (ghcr.io)
+  - [x] Security scanning (security.yml)
+  - [x] Helm chart release (helm-release.yml)
+  - [x] Dependabot configuration
 
 ## Success Criteria
 
@@ -304,8 +307,9 @@ Phase 1 is complete when:
 14. ✅ Docker containerization and deployment setup
 15. ✅ Implement cache layer (in-memory LRU + disk-based + two-tier coordinator)
 16. ✅ Complete documentation and Helm chart
-17. **Next: CI/CD pipeline setup**
-18. Implement auto-download providers on demand (Phase 2)
+17. ✅ CI/CD pipeline setup (GitHub Actions)
+18. **Next: Improve test coverage to >80%**
+19. Implement auto-download providers on demand (Phase 2)
 
 ## Timeline Estimate
 
