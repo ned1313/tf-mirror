@@ -498,18 +498,17 @@ async function handleDelete(provider: Provider) {
 
 function handleFileSelect(event: Event) {
   const input = event.target as HTMLInputElement
-  if (input.files?.length) {
-    selectedFile.value = input.files[0]
+  const file = input.files?.[0]
+  if (file) {
+    selectedFile.value = file
   }
 }
 
 function handleDrop(event: DragEvent) {
   const files = event.dataTransfer?.files
-  if (files?.length) {
-    const file = files[0]
-    if (file.name.endsWith('.hcl') || file.name.endsWith('.tf')) {
-      selectedFile.value = file
-    }
+  const file = files?.[0]
+  if (file && (file.name.endsWith('.hcl') || file.name.endsWith('.tf'))) {
+    selectedFile.value = file
   }
 }
 
