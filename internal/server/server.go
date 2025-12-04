@@ -16,6 +16,7 @@ import (
 	"github.com/ned1313/terraform-mirror/internal/cache"
 	"github.com/ned1313/terraform-mirror/internal/config"
 	"github.com/ned1313/terraform-mirror/internal/database"
+	"github.com/ned1313/terraform-mirror/internal/metrics"
 	"github.com/ned1313/terraform-mirror/internal/processor"
 	"github.com/ned1313/terraform-mirror/internal/storage"
 )
@@ -29,6 +30,7 @@ type Server struct {
 	router  *chi.Mux
 	server  *http.Server
 	logger  *log.Logger
+	metrics *metrics.Metrics
 
 	// Services
 	authService      *auth.Service
@@ -71,12 +73,20 @@ func NewWithCache(cfg *config.Config, db *database.DB, storage storage.Storage, 
 		c = cache.NewNoOpCache()
 	}
 
+	// Initialize metrics if telemetry is enabled
+	var m *metrics.Metrics
+	if cfg.Telemetry.Enabled {
+		m = metrics.New()
+		log.Printf("Telemetry enabled: metrics available at /metrics")
+	}
+
 	s := &Server{
 		config:           cfg,
 		db:               db,
 		storage:          storage,
 		cache:            c,
 		logger:           log.Default(),
+		metrics:          m,
 		authService:      authService,
 		processorService: processorService,
 		providerRepo:     database.NewProviderRepository(db),

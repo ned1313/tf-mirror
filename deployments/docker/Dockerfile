@@ -3,35 +3,48 @@ FROM node:20-alpine AS frontend-builder
 
 WORKDIR /app/web
 
+# Copy package files first for better layer caching
 COPY web/package*.json ./
-RUN npm ci
+RUN npm ci --prefer-offline
 
 COPY web/ ./
 RUN npm run build
 
 # Stage 2: Build backend
-FROM golang:1.24-alpine AS backend-builder
+FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS backend-builder
+
+# Build arguments for cross-compilation
+ARG TARGETOS
+ARG TARGETARCH
+ARG BUILD_TIME
+ARG GIT_COMMIT
 
 WORKDIR /app
 
 # Install build dependencies
-RUN apk add --no-cache git
+RUN apk add --no-cache git ca-certificates
 
-# Copy go mod files
+# Copy go mod files first for better layer caching
 COPY go.mod go.sum ./
-RUN go mod download
 
-# Copy source code
-COPY . .
+# Download dependencies - this layer is cached unless go.mod/go.sum change
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
 
-# Build the binary
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
-    -ldflags="-w -s -X github.com/ned1313/terraform-mirror/internal/version.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ) -X github.com/ned1313/terraform-mirror/internal/version.GitCommit=$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')" \
+# Copy only Go source files needed for build (excluding tests, docs, etc.)
+COPY cmd/ ./cmd/
+COPY internal/ ./internal/
+
+# Build the binary with build cache mount
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build \
+    -ldflags="-w -s -X github.com/ned1313/terraform-mirror/internal/version.BuildTime=${BUILD_TIME:-unknown} -X github.com/ned1313/terraform-mirror/internal/version.GitCommit=${GIT_COMMIT:-unknown}" \
     -o terraform-mirror \
     ./cmd/terraform-mirror
 
 # Stage 3: Final runtime image
-FROM alpine:3.23
+FROM alpine:3.23 AS runtime
 
 # Add ca-certificates for HTTPS and create non-root user
 RUN apk --no-cache add ca-certificates && \

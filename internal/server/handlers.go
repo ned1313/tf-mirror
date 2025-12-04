@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/ned1313/terraform-mirror/internal/database"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // Health check response
@@ -1003,11 +1004,52 @@ func (s *Server) handleTriggerBackup(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleMetrics returns Prometheus metrics
-// TODO: Implement full logic
 func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/plain")
-	w.WriteHeader(http.StatusNotImplemented)
-	w.Write([]byte("# Metrics not implemented yet\n"))
+	// Update gauge metrics before serving
+	s.updateMetricsGauges()
+
+	// Use the standard Prometheus HTTP handler
+	promhttp.Handler().ServeHTTP(w, r)
+}
+
+// updateMetricsGauges updates all gauge metrics with current values
+func (s *Server) updateMetricsGauges() {
+	if s.metrics == nil {
+		return
+	}
+
+	ctx := context.Background()
+
+	// Update provider counts
+	providers, err := s.providerRepo.List(ctx, 0, 0)
+	if err == nil {
+		// Count unique providers (namespace/type combinations)
+		uniqueProviders := make(map[string]struct{})
+		for _, p := range providers {
+			key := p.Namespace + "/" + p.Type
+			uniqueProviders[key] = struct{}{}
+		}
+		s.metrics.UpdateProviderCounts(len(uniqueProviders), len(providers))
+	}
+
+	// Update job counts
+	pendingCount, _ := s.jobRepo.CountByStatus(ctx, "pending")
+	runningCount, _ := s.jobRepo.CountByStatus(ctx, "running")
+	completedCount, _ := s.jobRepo.CountByStatus(ctx, "completed")
+	failedCount, _ := s.jobRepo.CountByStatus(ctx, "failed")
+	s.metrics.UpdateJobCounts(int(pendingCount), int(runningCount), int(completedCount), int(failedCount))
+
+	// Update processor status
+	processorStatus := s.processorService.GetStatus()
+	if running, ok := processorStatus["running"].(bool); ok {
+		s.metrics.SetProcessorStatus(running)
+	}
+
+	// Update cache stats if available
+	if s.cache != nil {
+		stats := s.cache.Stats()
+		s.metrics.UpdateCacheStats(stats.Size)
+	}
 }
 
 // handleProcessorStatus returns the current processor status

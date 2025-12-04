@@ -211,7 +211,7 @@ func TestHandleListProviders_Success(t *testing.T) {
 	assert.Equal(t, float64(0), count, "count should be 0 for empty database")
 }
 
-func TestHandleMetrics_NotImplemented(t *testing.T) {
+func TestHandleMetrics(t *testing.T) {
 	srv, cleanup := setupTestServer(t)
 	defer cleanup()
 
@@ -220,8 +220,13 @@ func TestHandleMetrics_NotImplemented(t *testing.T) {
 
 	srv.Router().ServeHTTP(w, req)
 
-	assert.Equal(t, http.StatusNotImplemented, w.Code)
-	assert.Equal(t, "text/plain", w.Header().Get("Content-Type"))
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Header().Get("Content-Type"), "text/plain")
+
+	// Verify Prometheus metrics are present in the response
+	body := w.Body.String()
+	assert.Contains(t, body, "terraform_mirror_")
+	assert.Contains(t, body, "providers_total")
 }
 
 func TestCORSMiddleware(t *testing.T) {
