@@ -72,18 +72,18 @@ jobs:
 
       - name: Start MinIO
         run: |
-          docker-compose -f deployments/docker-compose/docker-compose.test.yml up -d minio
+          docker compose -f deployments/docker-compose/docker-compose.test.yml up -d minio
           # Wait for MinIO to be healthy
           timeout 30 bash -c 'until curl -sf http://localhost:9000/minio/health/live; do sleep 1; done'
           # Create buckets
-          docker-compose -f deployments/docker-compose/docker-compose.test.yml up minio-init
+          docker compose -f deployments/docker-compose/docker-compose.test.yml up minio-init
 
       - name: Run integration tests
         run: go test -v -tags=integration -timeout=5m ./internal/storage/... ./internal/processor/...
 
       - name: Stop MinIO
         if: always()
-        run: docker-compose -f deployments/docker-compose/docker-compose.test.yml down -v
+        run: docker compose -f deployments/docker-compose/docker-compose.test.yml down -v
 
   build:
     name: Build
