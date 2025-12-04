@@ -145,7 +145,7 @@ Build the foundational infrastructure for Terraform Mirror with manual provider 
 - [x] Handler implementations (admin auth, providers, jobs)
 - [x] Graceful shutdown
 - [x] Comprehensive testing (all server tests passing)
-- [ ] Metrics endpoint (OpenTelemetry) - TODO
+- [x] Metrics endpoint (Prometheus)
 
 #### Background Job Processor ✅
 
@@ -218,15 +218,16 @@ Build the foundational infrastructure for Terraform Mirror with manual provider 
 
 #### Integration Tests
 - [x] Database integration tests (WAL mode, foreign keys, migrations)
-- [ ] S3 integration tests (with MinIO)
-- [ ] Cache integration tests
-- [ ] Full provider download flow
+- [x] S3 integration tests (with MinIO)
+- [x] Cache integration tests
+- [x] Full provider download flow (processor with S3)
 
 #### E2E Tests
-- [ ] Terraform client integration test
-- [ ] Provider discovery test
-- [ ] Provider download test
-- [ ] Admin workflow tests
+- [x] Terraform client integration test
+- [x] Provider discovery test
+- [x] Provider download test
+- [x] Admin workflow tests
+- [x] E2E test scripts (PowerShell and Bash)
 
 ### Documentation ✅
 

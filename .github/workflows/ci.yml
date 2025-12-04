@@ -57,10 +57,38 @@ jobs:
           name: codecov-umbrella
           fail_ci_if_error: false
 
+  integration-test:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Start MinIO
+        run: |
+          docker-compose -f deployments/docker-compose/docker-compose.test.yml up -d minio
+          # Wait for MinIO to be healthy
+          timeout 30 bash -c 'until curl -sf http://localhost:9000/minio/health/live; do sleep 1; done'
+          # Create buckets
+          docker-compose -f deployments/docker-compose/docker-compose.test.yml up minio-init
+
+      - name: Run integration tests
+        run: go test -v -tags=integration -timeout=5m ./internal/storage/... ./internal/processor/...
+
+      - name: Stop MinIO
+        if: always()
+        run: docker-compose -f deployments/docker-compose/docker-compose.test.yml down -v
+
   build:
     name: Build
     runs-on: ubuntu-latest
-    needs: [lint, test]
+    needs: [lint, test, integration-test]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
