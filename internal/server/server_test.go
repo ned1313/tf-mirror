@@ -36,10 +36,10 @@ func setupTestServer(t *testing.T) (*Server, func()) {
 			BackupEnabled: false,
 		},
 		Storage: config.StorageConfig{
-			Type:   "local",
+			Type:     "local",
 			Endpoint: filepath.Join(tempDir, "storage"),
-			Bucket: "test-bucket",
-			Region: "us-east-1",
+			Bucket:   "test-bucket",
+			Region:   "us-east-1",
 		},
 		Auth: config.AuthConfig{
 			JWTExpirationHours: 24,
