@@ -19,8 +19,6 @@ var (
 
 // Metrics holds all Prometheus metrics for the application
 type Metrics struct {
-	registry *prometheus.Registry
-
 	// HTTP metrics
 	HTTPRequestsTotal    *prometheus.CounterVec
 	HTTPRequestDuration  *prometheus.HistogramVec

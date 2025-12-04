@@ -269,3 +269,85 @@ func TestMetricsNamespace(t *testing.T) {
 		t.Errorf("Expected metric namespace 'terraform_mirror', got: %s", descStr)
 	}
 }
+
+func TestUpdateCacheStats(t *testing.T) {
+	m := newTestMetrics()
+
+	m.UpdateCacheStats(256 * 1024 * 1024) // 256MB
+
+	cacheSize := testutil.ToFloat64(m.CacheSize)
+	if cacheSize != 256*1024*1024 {
+		t.Errorf("Expected 256MB cache size, got %v", cacheSize)
+	}
+
+	// Update to new value
+	m.UpdateCacheStats(512 * 1024 * 1024) // 512MB
+	cacheSize = testutil.ToFloat64(m.CacheSize)
+	if cacheSize != 512*1024*1024 {
+		t.Errorf("Expected 512MB cache size, got %v", cacheSize)
+	}
+}
+
+func TestRecordCacheHit(t *testing.T) {
+	m := newTestMetrics()
+
+	m.RecordCacheHit()
+	m.RecordCacheHit()
+	m.RecordCacheHit()
+
+	hits := testutil.ToFloat64(m.CacheHits)
+	if hits != 3 {
+		t.Errorf("Expected 3 cache hits, got %v", hits)
+	}
+}
+
+func TestRecordCacheMiss(t *testing.T) {
+	m := newTestMetrics()
+
+	m.RecordCacheMiss()
+	m.RecordCacheMiss()
+
+	misses := testutil.ToFloat64(m.CacheMisses)
+	if misses != 2 {
+		t.Errorf("Expected 2 cache misses, got %v", misses)
+	}
+}
+
+func TestRecordCacheEviction(t *testing.T) {
+	m := newTestMetrics()
+
+	m.RecordCacheEviction()
+	m.RecordCacheEviction()
+	m.RecordCacheEviction()
+	m.RecordCacheEviction()
+
+	evictions := testutil.ToFloat64(m.CacheEvictions)
+	if evictions != 4 {
+		t.Errorf("Expected 4 cache evictions, got %v", evictions)
+	}
+}
+
+func TestSetActiveSessions_Multiple(t *testing.T) {
+	m := newTestMetrics()
+
+	// Set initial value
+	m.SetActiveSessions(10)
+	sessions := testutil.ToFloat64(m.ActiveSessions)
+	if sessions != 10 {
+		t.Errorf("Expected 10 active sessions, got %v", sessions)
+	}
+
+	// Update to new value
+	m.SetActiveSessions(5)
+	sessions = testutil.ToFloat64(m.ActiveSessions)
+	if sessions != 5 {
+		t.Errorf("Expected 5 active sessions, got %v", sessions)
+	}
+
+	// Set to zero
+	m.SetActiveSessions(0)
+	sessions = testutil.ToFloat64(m.ActiveSessions)
+	if sessions != 0 {
+		t.Errorf("Expected 0 active sessions, got %v", sessions)
+	}
+}

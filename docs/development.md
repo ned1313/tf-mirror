@@ -123,13 +123,39 @@ logging {
 mkdir -p data/providers data/cache
 ```
 
-### 5. Seed the Database
+### 5. Install Git Hooks (Recommended)
+
+Install the pre-commit hook to catch common issues before they reach CI:
+
+**Linux/macOS:**
+```bash
+./scripts/install-hooks.sh
+```
+
+**Windows (PowerShell):**
+```powershell
+.\scripts\install-hooks.ps1
+```
+
+The pre-commit hook checks for:
+- Go formatting issues (`gofmt`)
+- Go vet errors
+- Build errors
+- Linting issues (`golangci-lint` if installed)
+- Test failures
+
+Install `golangci-lint` for full linting (same as CI):
+```bash
+go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+```
+
+### 6. Seed the Database
 
 ```bash
 go run cmd/create-admin/main.go -config config.local.hcl -username admin -password admin123
 ```
 
-### 6. Run the Application
+### 7. Run the Application
 
 **Backend (without live reload):**
 ```bash
@@ -149,7 +175,7 @@ npm run dev
 
 The frontend dev server runs at `http://localhost:5173` and proxies API calls to the backend at `http://localhost:8080`.
 
-### 7. Alternative: Docker Compose Development
+### 8. Alternative: Docker Compose Development
 
 ```bash
 docker-compose -f deployments/docker-compose/docker-compose.dev.yml up
