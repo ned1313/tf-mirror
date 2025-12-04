@@ -1,5 +1,5 @@
 # Stage 1: Build frontend
-FROM node:25-alpine AS frontend-builder
+FROM node:20-alpine AS frontend-builder
 
 WORKDIR /app/web
 
@@ -10,7 +10,7 @@ COPY web/ ./
 RUN npm run build
 
 # Stage 2: Build backend
-FROM golang:1.25.5-alpine AS backend-builder
+FROM golang:1.24-alpine AS backend-builder
 
 WORKDIR /app
 
