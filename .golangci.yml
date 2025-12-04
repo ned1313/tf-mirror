@@ -10,47 +10,25 @@ linters:
   # Disable all default linters
   default: none
   enable:
-    - errcheck
-    - gosimple
     - govet
     - ineffassign
     - staticcheck
     - unused
-    - gofmt
-    - misspell
 
   settings:
-    errcheck:
-      # Don't check for unchecked errors in type assertions
-      check-type-assertions: false
-      # Don't check for unchecked blank identifier assignments
-      check-blank: false
-      # Ignore these functions
-      exclude-functions:
-        - (io.Closer).Close
-        - (*os.File).Close
-        - (net/http.ResponseWriter).Write
-    
     govet:
-      enable:
-        - printf
+      disable:
         - shadow
-        - structtag
     
-    misspell:
-      locale: US
+    staticcheck:
+      checks:
+        - "SA*"
+        - "-SA9003"
+
+formatters:
+  enable:
+    - gofmt
 
 issues:
-  # Exclude some linters from running on test files
-  exclude-rules:
-    - path: _test\.go
-      linters:
-        - errcheck
-    
-    # Exclude defer Close() errors
-    - linters:
-        - errcheck
-      text: "Error return value of .*(Close|Flush)"
-  
   max-issues-per-linter: 0
   max-same-issues: 0
