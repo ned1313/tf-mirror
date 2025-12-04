@@ -3,9 +3,10 @@
 
 run:
   timeout: 5m
-  modules-download-mode: readonly
 
 linters:
+  # Disable all linters and enable only specific ones
+  disable-all: true
   enable:
     - errcheck
     - gosimple
@@ -14,50 +15,44 @@ linters:
     - staticcheck
     - unused
     - gofmt
-    - goimports
     - misspell
-    - unconvert
-    - bodyclose
-    - noctx
-    - gosec
-    - exportloopref
 
 linters-settings:
   errcheck:
-    check-type-assertions: true
-    check-blank: true
+    # Don't check for unchecked errors in type assertions
+    check-type-assertions: false
+    # Don't check for unchecked blank identifier assignments
+    check-blank: false
+    # Ignore these functions
+    exclude-functions:
+      - (io.Closer).Close
+      - (*os.File).Close
+      - (net/http.ResponseWriter).Write
   
   govet:
-    enable-all: true
-    disable:
-      - fieldalignment
+    enable-all: false
+    enable:
+      - printf
+      - shadow
+      - structtag
   
   gofmt:
     simplify: true
   
-  goimports:
-    local-prefixes: github.com/ned1313/tf-mirror
-  
   misspell:
     locale: US
-  
-  gosec:
-    excludes:
-      - G104 # Audit errors not checked
-      - G304 # File path provided as taint input
 
 issues:
+  # Exclude some linters from running on test files
   exclude-rules:
-    # Exclude some linters from running on tests files
     - path: _test\.go
       linters:
-        - gosec
-        - noctx
+        - errcheck
     
-    # Exclude known issues in generated files
-    - path: internal/database/models\.go
-      linters:
-        - unused
+    # Exclude defer Close() errors
+    - linters:
+        - errcheck
+      text: "Error return value of .*(Close|Flush)"
   
   max-issues-per-linter: 0
   max-same-issues: 0

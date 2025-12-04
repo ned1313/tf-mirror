@@ -90,7 +90,7 @@ func main() {
 			log.Printf("Warning: Failed to initialize cache, running without cache: %v", err)
 			cacheInstance = cache.NewNoOpCache()
 		} else {
-			log.Printf("Cache initialized: %dMB memory, %dGB disk at %s", 
+			log.Printf("Cache initialized: %dMB memory, %dGB disk at %s",
 				cfg.Cache.MemorySizeMB, cfg.Cache.DiskSizeGB, cfg.Cache.DiskPath)
 		}
 	} else {

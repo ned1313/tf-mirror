@@ -222,8 +222,8 @@ func formatPercent(percent float64) string {
 
 // ClearCacheResponse represents the response from clearing the cache
 type ClearCacheResponse struct {
-	Message     string `json:"message"`
-	ItemsCleared int64 `json:"items_cleared"`
+	Message      string `json:"message"`
+	ItemsCleared int64  `json:"items_cleared"`
 }
 
 // handleClearCache clears all items from the cache
