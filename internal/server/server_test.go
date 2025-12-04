@@ -17,9 +17,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// setupTestServer creates a test server with temporary database and storage
+// setupTestServer creates a test server with temporary database and mock storage
 func setupTestServer(t *testing.T) (*Server, func()) {
-	// Create temporary directory for test database and storage
+	// Create temporary directory for test database
 	tempDir, err := os.MkdirTemp("", "server_test_*")
 	require.NoError(t, err)
 
@@ -36,7 +36,8 @@ func setupTestServer(t *testing.T) (*Server, func()) {
 			BackupEnabled: false,
 		},
 		Storage: config.StorageConfig{
-			Type:   "s3",
+			Type:   "local",
+			Endpoint: filepath.Join(tempDir, "storage"),
 			Bucket: "test-bucket",
 			Region: "us-east-1",
 		},
@@ -61,9 +62,8 @@ func setupTestServer(t *testing.T) (*Server, func()) {
 	db, err := database.New(cfg.Database.Path)
 	require.NoError(t, err)
 
-	// Initialize storage
-	store, err := storage.NewFromConfig(context.Background(), cfg.Storage)
-	require.NoError(t, err)
+	// Use mock storage for testing
+	store := storage.NewMockStorage()
 
 	// Create server
 	srv := New(cfg, db, store)
