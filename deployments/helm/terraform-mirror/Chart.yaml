@@ -1,0 +1,17 @@
+apiVersion: v2
+name: terraform-mirror
+description: A Helm chart for deploying Terraform Mirror - a caching proxy for Terraform providers
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - terraform
+  - mirror
+  - provider
+  - cache
+  - registry
+maintainers:
+  - name: Terraform Mirror Team
+home: https://github.com/ned1313/tf-mirror
+sources:
+  - https://github.com/ned1313/tf-mirror

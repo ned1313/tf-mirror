@@ -1,0 +1,142 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "terraform-mirror.fullname" . }}
+  labels:
+    {{- include "terraform-mirror.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "terraform-mirror.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+      {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "terraform-mirror.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "terraform-mirror.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- if and .Values.admin.createUser .Values.admin.password }}
+      initContainers:
+        - name: create-admin
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              if [ ! -f /data/.admin-created ]; then
+                /app/create-admin -config /app/config.hcl -username {{ .Values.admin.username }} -password "$ADMIN_PASSWORD" && \
+                touch /data/.admin-created
+              fi
+          env:
+            - name: ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "terraform-mirror.secretName" . }}
+                  key: admin-password
+            - name: TFM_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "terraform-mirror.secretName" . }}
+                  key: {{ .Values.secrets.existingSecretKeys.jwtSecret | default "jwt-secret" }}
+            {{- if eq .Values.config.storage.type "s3" }}
+            - name: TFM_S3_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "terraform-mirror.secretName" . }}
+                  key: {{ .Values.secrets.existingSecretKeys.s3AccessKey | default "s3-access-key" }}
+            - name: TFM_S3_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "terraform-mirror.secretName" . }}
+                  key: {{ .Values.secrets.existingSecretKeys.s3SecretKey | default "s3-secret-key" }}
+            {{- end }}
+          volumeMounts:
+            - name: config
+              mountPath: /app/config.hcl
+              subPath: config.hcl
+              readOnly: true
+            - name: data
+              mountPath: /data
+      {{- end }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - -config
+            - /app/config.hcl
+          ports:
+            - name: http
+              containerPort: {{ .Values.config.server.port }}
+              protocol: TCP
+          env:
+            - name: TFM_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "terraform-mirror.secretName" . }}
+                  key: {{ .Values.secrets.existingSecretKeys.jwtSecret | default "jwt-secret" }}
+            {{- if eq .Values.config.storage.type "s3" }}
+            - name: TFM_S3_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "terraform-mirror.secretName" . }}
+                  key: {{ .Values.secrets.existingSecretKeys.s3AccessKey | default "s3-access-key" }}
+            - name: TFM_S3_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "terraform-mirror.secretName" . }}
+                  key: {{ .Values.secrets.existingSecretKeys.s3SecretKey | default "s3-secret-key" }}
+            {{- end }}
+          livenessProbe:
+            {{- toYaml .Values.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /app/config.hcl
+              subPath: config.hcl
+              readOnly: true
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "terraform-mirror.fullname" . }}-config
+        - name: data
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "terraform-mirror.fullname" . }}-data
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
