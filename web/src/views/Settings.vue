@@ -236,7 +236,7 @@ function getLogLevelClass(level: string): string {
     warn: 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800',
     error: 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800',
   }
-  return classes[level] || classes.info
+  return classes[level] ?? classes.info ?? ''
 }
 
 async function handleRecalculate() {
