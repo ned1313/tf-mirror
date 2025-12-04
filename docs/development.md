@@ -602,6 +602,64 @@ Run integration tests:
 go test -tags=integration ./...
 ```
 
+### Running Integration Tests with MinIO
+
+Integration tests require MinIO to be running. Use the provided scripts:
+
+**PowerShell (Windows):**
+```powershell
+.\scripts\run-integration-tests.ps1
+.\scripts\run-integration-tests.ps1 -KeepRunning          # Keep MinIO running after tests
+.\scripts\run-integration-tests.ps1 -Package storage      # Test only storage package
+```
+
+**Bash (Linux/macOS):**
+```bash
+./scripts/run-integration-tests.sh
+./scripts/run-integration-tests.sh --keep-running
+./scripts/run-integration-tests.sh --package storage
+```
+
+**Manual setup:**
+```bash
+# Start MinIO
+docker-compose -f deployments/docker-compose/docker-compose.test.yml up -d
+
+# Run integration tests
+go test -v -tags=integration ./internal/storage/... ./internal/processor/...
+
+# Stop MinIO
+docker-compose -f deployments/docker-compose/docker-compose.test.yml down -v
+```
+
+### End-to-End Tests
+
+E2E tests start the full stack and test the complete workflow including Terraform CLI integration:
+
+**PowerShell (Windows):**
+```powershell
+.\scripts\run-e2e-tests.ps1
+.\scripts\run-e2e-tests.ps1 -KeepRunning           # Keep stack running after tests
+.\scripts\run-e2e-tests.ps1 -SkipTerraformTests    # Skip Terraform CLI tests
+.\scripts\run-e2e-tests.ps1 -SkipBuild             # Don't rebuild Docker image
+```
+
+**Bash (Linux/macOS):**
+```bash
+./scripts/run-e2e-tests.sh
+./scripts/run-e2e-tests.sh --keep-running
+./scripts/run-e2e-tests.sh --skip-terraform
+./scripts/run-e2e-tests.sh --skip-build
+```
+
+E2E tests verify:
+- Health and metrics endpoints
+- Service discovery (`/.well-known/terraform.json`)
+- Admin authentication
+- Provider loading via HCL upload
+- Job processing and completion
+- Terraform CLI integration with the mirror
+
 ### Mocking
 
 Use interfaces for mockable dependencies:
