@@ -50,6 +50,33 @@ func (s *Server) handleMirrorProviderVersionsFromParts(w http.ResponseWriter, r 
 		return
 	}
 
+	// If no local providers, try to get versions from upstream registry
+	if len(providers) == 0 && s.autoDownloadService != nil && s.autoDownloadService.IsEnabled() {
+		s.logger.Printf("Provider %s/%s not found locally, querying upstream registry for versions",
+			namespace, providerType)
+
+		upstreamVersions, err := s.autoDownloadService.GetAvailableVersions(ctx, namespace, providerType)
+		if err != nil {
+			s.logger.Printf("Failed to get upstream versions for %s/%s: %v", namespace, providerType, err)
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		// Return versions from upstream - Terraform will then request specific version.json
+		// which will trigger the actual download
+		versions := make(map[string]interface{})
+		for _, v := range upstreamVersions {
+			versions[v] = map[string]interface{}{}
+		}
+
+		response := map[string]interface{}{
+			"versions": versions,
+		}
+
+		respondJSON(w, http.StatusOK, response)
+		return
+	}
+
 	if len(providers) == 0 {
 		w.WriteHeader(http.StatusNotFound)
 		return
@@ -88,6 +115,33 @@ func (s *Server) handleMirrorProviderPackagesFromParts(w http.ResponseWriter, r 
 		}
 	}
 
+	// If no providers found for this version, try auto-download
+	if len(versionProviders) == 0 {
+		if s.autoDownloadService != nil && s.autoDownloadService.IsEnabled() {
+			s.logger.Printf("Provider %s/%s %s not found in mirror, attempting auto-download for all platforms",
+				namespace, providerType, version)
+
+			// Download for all configured platforms
+			platforms := s.config.AutoDownload.GetPlatforms()
+			for _, platform := range platforms {
+				platformOS, platformArch := parsePlatformString(platform)
+				if platformOS == "" || platformArch == "" {
+					continue
+				}
+
+				downloadedProvider, downloadErr := s.autoDownloadService.DownloadProvider(
+					ctx, namespace, providerType, version, platformOS, platformArch,
+				)
+				if downloadErr != nil {
+					s.logger.Printf("Auto-download failed for %s/%s %s (%s): %v",
+						namespace, providerType, version, platform, downloadErr)
+					continue
+				}
+				versionProviders = append(versionProviders, downloadedProvider)
+			}
+		}
+	}
+
 	if len(versionProviders) == 0 {
 		w.WriteHeader(http.StatusNotFound)
 		return
@@ -118,4 +172,14 @@ func (s *Server) handleMirrorProviderPackagesFromParts(w http.ResponseWriter, r 
 	}
 
 	respondJSON(w, http.StatusOK, response)
+}
+
+// parsePlatformString splits a platform string (e.g., "linux_amd64") into os and arch
+func parsePlatformString(platform string) (os, arch string) {
+	for i := len(platform) - 1; i >= 0; i-- {
+		if platform[i] == '_' {
+			return platform[:i], platform[i+1:]
+		}
+	}
+	return "", ""
 }

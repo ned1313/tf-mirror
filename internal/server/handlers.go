@@ -389,12 +389,13 @@ func (s *Server) handleDeleteProvider(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleListJobs retrieves all jobs with pagination
-// GET /admin/api/jobs?limit=10&offset=0
+// handleListJobs retrieves all jobs with pagination and optional status filter
+// GET /admin/api/jobs?limit=10&offset=0&status=pending
 func (s *Server) handleListJobs(w http.ResponseWriter, r *http.Request) {
 	// Parse query parameters
 	limitStr := r.URL.Query().Get("limit")
 	offsetStr := r.URL.Query().Get("offset")
+	statusFilter := r.URL.Query().Get("status")
 
 	limit := 10 // default
 	offset := 0
@@ -411,8 +412,16 @@ func (s *Server) handleListJobs(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Get jobs from database
-	jobs, err := s.jobRepo.List(r.Context(), limit, offset)
+	// Get jobs from database (with optional status filter)
+	var jobs []*database.DownloadJob
+	var err error
+
+	if statusFilter != "" {
+		jobs, err = s.jobRepo.ListByStatus(r.Context(), statusFilter, limit, offset)
+	} else {
+		jobs, err = s.jobRepo.List(r.Context(), limit, offset)
+	}
+
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "database_error",
 			"Failed to retrieve jobs")

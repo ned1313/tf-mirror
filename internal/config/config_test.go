@@ -87,6 +87,14 @@ providers {
 quota {
   enabled = false
 }
+
+auto_download {
+  enabled = false
+  rate_limit_per_minute = 10
+  max_concurrent_downloads = 3
+  allowed_namespaces = ["hashicorp"]
+  timeout_seconds = 300
+}
 `
 
 	err := os.WriteFile(configPath, []byte(configContent), 0644)

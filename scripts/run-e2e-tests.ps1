@@ -16,15 +16,15 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$ProjectRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$ProjectRoot = Split-Path -Parent $PSScriptRoot
 if (-not $ProjectRoot) {
     $ProjectRoot = (Get-Location).Path
 }
 
 # Configuration
-$MirrorUrl = "http://localhost:8080"
+$MirrorUrl = "http://127.0.0.1:8080"
 $AdminUsername = "admin"
-$AdminPassword = "testpassword123"
+$AdminPassword = "changeme123"  # Must match docker-compose.yml
 $ComposeFile = Join-Path $ProjectRoot "deployments\docker-compose\docker-compose.yml"
 
 function Write-Status {
@@ -74,8 +74,8 @@ function Start-Stack {
     
     Write-Status "Waiting for services to be healthy..."
     
-    # Wait for MinIO
-    if (-not (Test-ServiceReady -Url "http://localhost:9000/minio/health/live" -TimeoutSeconds 30)) {
+    # Wait for MinIO (use 127.0.0.1 to avoid IPv6 resolution issues on Windows)
+    if (-not (Test-ServiceReady -Url "http://127.0.0.1:9000/minio/health/live" -TimeoutSeconds 60)) {
         Write-Status "MinIO failed to start" "Red"
         return $false
     }
@@ -169,10 +169,12 @@ provider "hashicorp/null" {
 }
 
 function Test-ProviderVersionList {
+    # Test the Network Mirror Protocol endpoint for listing provider versions
+    # Format: /{hostname}/{namespace}/{type}/index.json
     try {
-        $response = Invoke-RestMethod -Uri "$MirrorUrl/v1/providers/hashicorp/null/versions" -Method Get -ErrorAction SilentlyContinue
+        $response = Invoke-RestMethod -Uri "$MirrorUrl/registry.terraform.io/hashicorp/null/index.json" -Method Get -ErrorAction SilentlyContinue
         # May be empty initially if provider hasn't been loaded yet
-        return $true
+        return ($null -ne $response.versions)
     } catch {
         # 404 is acceptable if no providers loaded
         if ($_.Exception.Response.StatusCode -eq 404) {
@@ -202,7 +204,7 @@ function Test-MetricsEndpoint {
 }
 
 function Wait-ForJobCompletion {
-    param([string]$Token, [int]$TimeoutSeconds = 120)
+    param([string]$Token, [int]$TimeoutSeconds = 30)
     
     $headers = @{ "Authorization" = "Bearer $Token" }
     $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
@@ -222,6 +224,7 @@ function Wait-ForJobCompletion {
             Write-Host "." -NoNewline
             Start-Sleep -Seconds 2
         } catch {
+            Write-Host "E" -NoNewline  # Indicate error
             Start-Sleep -Seconds 2
         }
     }
@@ -236,6 +239,12 @@ function Test-TerraformInit {
     $terraformPath = Get-Command terraform -ErrorAction SilentlyContinue
     if (-not $terraformPath) {
         Write-Host "  [SKIP] Terraform CLI not found" -ForegroundColor Yellow
+        return $null
+    }
+    
+    # Terraform requires HTTPS for network mirrors - skip if using HTTP
+    if ($MirrorUrl -like "http://*" -and $MirrorUrl -notlike "https://*") {
+        Write-Host "  [SKIP] Terraform requires HTTPS for network mirrors (using $MirrorUrl)" -ForegroundColor Yellow
         return $null
     }
     
@@ -255,11 +264,12 @@ provider "null" {}
 resource "null_resource" "test" {}
 "@
     
-    # Create terraformrc to use our mirror
+    # Create terraformrc to use our mirror (Network Mirror Protocol)
+    # Terraform will request: {url}/{hostname}/{namespace}/{type}/index.json
     $terraformRc = @"
 provider_installation {
   network_mirror {
-    url = "$MirrorUrl/v1/providers/"
+    url = "$MirrorUrl/"
   }
 }
 "@

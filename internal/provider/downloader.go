@@ -30,6 +30,8 @@ const (
 type RegistryDownloader interface {
 	// DownloadProviderComplete performs the complete download workflow
 	DownloadProviderComplete(ctx context.Context, namespace, providerType, version, os, arch string) *DownloadResult
+	// GetAvailableVersions retrieves available versions from the registry
+	GetAvailableVersions(ctx context.Context, namespace, providerType string) ([]string, error)
 }
 
 // RegistryClient handles communication with the Terraform Registry API
@@ -69,6 +71,55 @@ type registryDownloadResponse struct {
 	Filename    string   `json:"filename"`
 	DownloadURL string   `json:"download_url"`
 	Shasum      string   `json:"shasum"`
+}
+
+// registryVersionsResponse represents the API response from the versions endpoint
+type registryVersionsResponse struct {
+	Versions []struct {
+		Version   string `json:"version"`
+		Platforms []struct {
+			OS   string `json:"os"`
+			Arch string `json:"arch"`
+		} `json:"platforms"`
+	} `json:"versions"`
+}
+
+// GetAvailableVersions retrieves available versions from the Terraform Registry
+func (c *RegistryClient) GetAvailableVersions(ctx context.Context, namespace, providerType string) ([]string, error) {
+	// Construct URL: /v1/providers/{namespace}/{type}/versions
+	url := fmt.Sprintf("%s/%s/%s/versions", c.baseURL, namespace, providerType)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query versions: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, fmt.Errorf("provider not found: %s/%s", namespace, providerType)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("registry returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var data registryVersionsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	versions := make([]string, 0, len(data.Versions))
+	for _, v := range data.Versions {
+		versions = append(versions, v.Version)
+	}
+
+	return versions, nil
 }
 
 // GetDownloadInfo retrieves download metadata from the Terraform Registry

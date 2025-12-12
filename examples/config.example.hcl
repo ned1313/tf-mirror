@@ -117,3 +117,33 @@ quota {
   max_storage_gb = 0  # 0 = unlimited
   warning_threshold_percent = 80
 }
+
+# Auto-download configuration for on-demand provider downloads
+# When enabled, providers not in the cache will be fetched from the upstream registry
+auto_download {
+  enabled = false
+  
+  # Namespaces to allow/block for auto-download
+  # Empty allowed_namespaces means all namespaces are allowed
+  # blocked_namespaces takes precedence over allowed_namespaces
+  allowed_namespaces = []
+  blocked_namespaces = []
+  
+  # Platforms to auto-download when a provider is requested
+  # When a provider version is requested, it will be downloaded for all these platforms
+  # Default: ["linux_amd64", "windows_amd64"]
+  platforms = ["linux_amd64", "windows_amd64"]
+  
+  # Rate limiting
+  rate_limit_per_minute = 10
+  max_concurrent_downloads = 3
+  queue_size = 100
+  timeout_seconds = 300
+  
+  # Retry configuration
+  retry_on_failure = true
+  
+  # Cache negative (not found) results to avoid repeated upstream requests
+  cache_negative_results = true
+  negative_cache_ttl_seconds = 300
+}

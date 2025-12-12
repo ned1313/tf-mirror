@@ -6,17 +6,18 @@ import (
 
 // Config represents the complete application configuration
 type Config struct {
-	Server    ServerConfig    `hcl:"server,block"`
-	Storage   StorageConfig   `hcl:"storage,block"`
-	Database  DatabaseConfig  `hcl:"database,block"`
-	Cache     CacheConfig     `hcl:"cache,block"`
-	Features  FeaturesConfig  `hcl:"features,block"`
-	Auth      AuthConfig      `hcl:"auth,block"`
-	Processor ProcessorConfig `hcl:"processor,block"`
-	Logging   LoggingConfig   `hcl:"logging,block"`
-	Telemetry TelemetryConfig `hcl:"telemetry,block"`
-	Providers ProvidersConfig `hcl:"providers,block"`
-	Quota     QuotaConfig     `hcl:"quota,block"`
+	Server       ServerConfig        `hcl:"server,block"`
+	Storage      StorageConfig       `hcl:"storage,block"`
+	Database     DatabaseConfig      `hcl:"database,block"`
+	Cache        CacheConfig         `hcl:"cache,block"`
+	Features     FeaturesConfig      `hcl:"features,block"`
+	Auth         AuthConfig          `hcl:"auth,block"`
+	Processor    ProcessorConfig     `hcl:"processor,block"`
+	Logging      LoggingConfig       `hcl:"logging,block"`
+	Telemetry    TelemetryConfig     `hcl:"telemetry,block"`
+	Providers    ProvidersConfig     `hcl:"providers,block"`
+	Quota        QuotaConfig         `hcl:"quota,block"`
+	AutoDownload *AutoDownloadConfig `hcl:"auto_download,block"`
 }
 
 // ServerConfig contains HTTP server settings
@@ -62,6 +63,21 @@ type FeaturesConfig struct {
 	AutoDownloadProviders bool `hcl:"auto_download_providers,optional"`
 	AutoDownloadModules   bool `hcl:"auto_download_modules,optional"`
 	MaxDownloadSizeMB     int  `hcl:"max_download_size_mb,optional"`
+}
+
+// AutoDownloadConfig contains auto-download specific settings
+type AutoDownloadConfig struct {
+	Enabled              bool     `hcl:"enabled,optional"`
+	AllowedNamespaces    []string `hcl:"allowed_namespaces,optional"`    // Empty = all allowed
+	BlockedNamespaces    []string `hcl:"blocked_namespaces,optional"`    // Takes precedence over allowed
+	Platforms            []string `hcl:"platforms,optional"`             // Platforms to download (e.g., linux_amd64)
+	RateLimitPerMinute   int      `hcl:"rate_limit_per_minute,optional"` // Max downloads per minute
+	MaxConcurrentDL      int      `hcl:"max_concurrent_downloads,optional"`
+	QueueSize            int      `hcl:"queue_size,optional"`      // Max pending downloads
+	TimeoutSeconds       int      `hcl:"timeout_seconds,optional"` // Per-download timeout
+	RetryOnFailure       bool     `hcl:"retry_on_failure,optional"`
+	CacheNegativeResults bool     `hcl:"cache_negative_results,optional"` // Cache "not found" responses
+	NegativeCacheTTL     int      `hcl:"negative_cache_ttl_seconds,optional"`
 }
 
 // AuthConfig contains authentication settings
@@ -190,6 +206,19 @@ func DefaultConfig() *Config {
 			MaxStorageGB:            0,
 			WarningThresholdPercent: 80,
 		},
+		AutoDownload: &AutoDownloadConfig{
+			Enabled:              false, // Disabled by default for security
+			AllowedNamespaces:    []string{},
+			BlockedNamespaces:    []string{},
+			Platforms:            []string{"linux_amd64", "windows_amd64"}, // Default platforms
+			RateLimitPerMinute:   10,
+			MaxConcurrentDL:      3,
+			QueueSize:            100,
+			TimeoutSeconds:       300, // 5 minutes per download
+			RetryOnFailure:       true,
+			CacheNegativeResults: true,
+			NegativeCacheTTL:     300, // 5 minutes
+		},
 	}
 }
 
@@ -216,4 +245,46 @@ func (c *DatabaseConfig) GetBackupInterval() time.Duration {
 // GetCacheTTL returns the cache TTL as a duration
 func (c *CacheConfig) GetCacheTTL() time.Duration {
 	return time.Duration(c.TTLSeconds) * time.Second
+}
+
+// GetTimeout returns the auto-download timeout as a duration
+func (c *AutoDownloadConfig) GetTimeout() time.Duration {
+	return time.Duration(c.TimeoutSeconds) * time.Second
+}
+
+// GetNegativeCacheTTL returns the negative cache TTL as a duration
+func (c *AutoDownloadConfig) GetNegativeCacheTTL() time.Duration {
+	return time.Duration(c.NegativeCacheTTL) * time.Second
+}
+
+// GetPlatforms returns the configured platforms, with defaults if empty
+func (c *AutoDownloadConfig) GetPlatforms() []string {
+	if len(c.Platforms) == 0 {
+		return []string{"linux_amd64", "windows_amd64"}
+	}
+	return c.Platforms
+}
+
+// IsNamespaceAllowed checks if a namespace is allowed for auto-download
+func (c *AutoDownloadConfig) IsNamespaceAllowed(namespace string) bool {
+	// Check blocked list first (takes precedence)
+	for _, blocked := range c.BlockedNamespaces {
+		if blocked == namespace {
+			return false
+		}
+	}
+
+	// If allowed list is empty, all non-blocked namespaces are allowed
+	if len(c.AllowedNamespaces) == 0 {
+		return true
+	}
+
+	// Check allowed list
+	for _, allowed := range c.AllowedNamespaces {
+		if allowed == namespace {
+			return true
+		}
+	}
+
+	return false
 }
