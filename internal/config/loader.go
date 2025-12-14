@@ -190,6 +190,55 @@ func applyEnvOverrides(cfg *Config) {
 			cfg.Quota.MaxStorageGB = max
 		}
 	}
+
+	// Auto-download configuration
+	// Initialize with defaults if block was not present in HCL file
+	if cfg.AutoDownload == nil {
+		cfg.AutoDownload = &AutoDownloadConfig{
+			Enabled:              false,
+			AllowedNamespaces:    []string{},
+			BlockedNamespaces:    []string{},
+			Platforms:            []string{"linux_amd64", "windows_amd64"},
+			RateLimitPerMinute:   10,
+			MaxConcurrentDL:      3,
+			QueueSize:            100,
+			TimeoutSeconds:       300,
+			RetryOnFailure:       true,
+			CacheNegativeResults: true,
+			NegativeCacheTTL:     300,
+		}
+	}
+	// Set default platforms if empty
+	if len(cfg.AutoDownload.Platforms) == 0 {
+		cfg.AutoDownload.Platforms = []string{"linux_amd64", "windows_amd64"}
+	}
+	if val := os.Getenv("TFM_AUTO_DOWNLOAD_ENABLED"); val != "" {
+		cfg.AutoDownload.Enabled = parseBool(val)
+	}
+	if val := os.Getenv("TFM_AUTO_DOWNLOAD_RATE_LIMIT_PER_MINUTE"); val != "" {
+		if limit, err := strconv.Atoi(val); err == nil {
+			cfg.AutoDownload.RateLimitPerMinute = limit
+		}
+	}
+	if val := os.Getenv("TFM_AUTO_DOWNLOAD_MAX_CONCURRENT"); val != "" {
+		if max, err := strconv.Atoi(val); err == nil {
+			cfg.AutoDownload.MaxConcurrentDL = max
+		}
+	}
+	if val := os.Getenv("TFM_AUTO_DOWNLOAD_TIMEOUT_SECONDS"); val != "" {
+		if timeout, err := strconv.Atoi(val); err == nil {
+			cfg.AutoDownload.TimeoutSeconds = timeout
+		}
+	}
+	if val := os.Getenv("TFM_AUTO_DOWNLOAD_ALLOWED_NAMESPACES"); val != "" {
+		cfg.AutoDownload.AllowedNamespaces = strings.Split(val, ",")
+	}
+	if val := os.Getenv("TFM_AUTO_DOWNLOAD_BLOCKED_NAMESPACES"); val != "" {
+		cfg.AutoDownload.BlockedNamespaces = strings.Split(val, ",")
+	}
+	if val := os.Getenv("TFM_AUTO_DOWNLOAD_PLATFORMS"); val != "" {
+		cfg.AutoDownload.Platforms = strings.Split(val, ",")
+	}
 }
 
 // parseBool parses a boolean value from string (supports: true/false, yes/no, 1/0)

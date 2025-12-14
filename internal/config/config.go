@@ -6,17 +6,20 @@ import (
 
 // Config represents the complete application configuration
 type Config struct {
-	Server    ServerConfig    `hcl:"server,block"`
-	Storage   StorageConfig   `hcl:"storage,block"`
-	Database  DatabaseConfig  `hcl:"database,block"`
-	Cache     CacheConfig     `hcl:"cache,block"`
-	Features  FeaturesConfig  `hcl:"features,block"`
-	Auth      AuthConfig      `hcl:"auth,block"`
-	Processor ProcessorConfig `hcl:"processor,block"`
-	Logging   LoggingConfig   `hcl:"logging,block"`
-	Telemetry TelemetryConfig `hcl:"telemetry,block"`
-	Providers ProvidersConfig `hcl:"providers,block"`
-	Quota     QuotaConfig     `hcl:"quota,block"`
+	Server              ServerConfig               `hcl:"server,block"`
+	Storage             StorageConfig              `hcl:"storage,block"`
+	Database            DatabaseConfig             `hcl:"database,block"`
+	Cache               CacheConfig                `hcl:"cache,block"`
+	Features            FeaturesConfig             `hcl:"features,block"`
+	Auth                AuthConfig                 `hcl:"auth,block"`
+	Processor           ProcessorConfig            `hcl:"processor,block"`
+	Logging             LoggingConfig              `hcl:"logging,block"`
+	Telemetry           TelemetryConfig            `hcl:"telemetry,block"`
+	Providers           ProvidersConfig            `hcl:"providers,block"`
+	Modules             ModulesConfig              `hcl:"modules,block"`
+	Quota               QuotaConfig                `hcl:"quota,block"`
+	AutoDownload        *AutoDownloadConfig        `hcl:"auto_download,block"`
+	AutoDownloadModules *AutoDownloadModulesConfig `hcl:"auto_download_modules,block"`
 }
 
 // ServerConfig contains HTTP server settings
@@ -64,6 +67,21 @@ type FeaturesConfig struct {
 	MaxDownloadSizeMB     int  `hcl:"max_download_size_mb,optional"`
 }
 
+// AutoDownloadConfig contains auto-download specific settings
+type AutoDownloadConfig struct {
+	Enabled              bool     `hcl:"enabled,optional"`
+	AllowedNamespaces    []string `hcl:"allowed_namespaces,optional"`    // Empty = all allowed
+	BlockedNamespaces    []string `hcl:"blocked_namespaces,optional"`    // Takes precedence over allowed
+	Platforms            []string `hcl:"platforms,optional"`             // Platforms to download (e.g., linux_amd64)
+	RateLimitPerMinute   int      `hcl:"rate_limit_per_minute,optional"` // Max downloads per minute
+	MaxConcurrentDL      int      `hcl:"max_concurrent_downloads,optional"`
+	QueueSize            int      `hcl:"queue_size,optional"`      // Max pending downloads
+	TimeoutSeconds       int      `hcl:"timeout_seconds,optional"` // Per-download timeout
+	RetryOnFailure       bool     `hcl:"retry_on_failure,optional"`
+	CacheNegativeResults bool     `hcl:"cache_negative_results,optional"` // Cache "not found" responses
+	NegativeCacheTTL     int      `hcl:"negative_cache_ttl_seconds,optional"`
+}
+
 // AuthConfig contains authentication settings
 type AuthConfig struct {
 	JWTSecret          string `hcl:"jwt_secret,optional"`
@@ -105,6 +123,27 @@ type ProvidersConfig struct {
 	DownloadRetryAttempts       int    `hcl:"download_retry_attempts,optional"`
 	DownloadRetryInitialDelayMs int    `hcl:"download_retry_initial_delay_ms,optional"`
 	DownloadTimeoutSeconds      int    `hcl:"download_timeout_seconds,optional"`
+}
+
+// ModulesConfig contains module-specific settings
+type ModulesConfig struct {
+	UpstreamRegistry            string `hcl:"upstream_registry,optional"` // default: registry.terraform.io
+	DownloadRetryAttempts       int    `hcl:"download_retry_attempts,optional"`
+	DownloadRetryInitialDelayMs int    `hcl:"download_retry_initial_delay_ms,optional"`
+	DownloadTimeoutSeconds      int    `hcl:"download_timeout_seconds,optional"`
+	MirrorHostname              string `hcl:"mirror_hostname,optional"` // Hostname to use for rewriting nested module sources
+}
+
+// AutoDownloadModulesConfig contains module auto-download specific settings
+type AutoDownloadModulesConfig struct {
+	Enabled              bool     `hcl:"enabled,optional"`
+	AllowedNamespaces    []string `hcl:"allowed_namespaces,optional"`    // Empty = all allowed
+	BlockedNamespaces    []string `hcl:"blocked_namespaces,optional"`    // Takes precedence over allowed
+	RateLimitPerMinute   int      `hcl:"rate_limit_per_minute,optional"` // Max downloads per minute
+	MaxConcurrentDL      int      `hcl:"max_concurrent_downloads,optional"`
+	TimeoutSeconds       int      `hcl:"timeout_seconds,optional"`        // Per-download timeout
+	CacheNegativeResults bool     `hcl:"cache_negative_results,optional"` // Cache "not found" responses
+	NegativeCacheTTL     int      `hcl:"negative_cache_ttl_seconds,optional"`
 }
 
 // QuotaConfig contains storage quota settings
@@ -185,10 +224,40 @@ func DefaultConfig() *Config {
 			DownloadRetryInitialDelayMs: 1000,
 			DownloadTimeoutSeconds:      60,
 		},
+		Modules: ModulesConfig{
+			UpstreamRegistry:            "registry.terraform.io",
+			DownloadRetryAttempts:       5,
+			DownloadRetryInitialDelayMs: 1000,
+			DownloadTimeoutSeconds:      120,
+			MirrorHostname:              "", // Must be set via config for module source rewriting
+		},
 		Quota: QuotaConfig{
 			Enabled:                 false,
 			MaxStorageGB:            0,
 			WarningThresholdPercent: 80,
+		},
+		AutoDownload: &AutoDownloadConfig{
+			Enabled:              false, // Disabled by default for security
+			AllowedNamespaces:    []string{},
+			BlockedNamespaces:    []string{},
+			Platforms:            []string{"linux_amd64", "windows_amd64"}, // Default platforms
+			RateLimitPerMinute:   10,
+			MaxConcurrentDL:      3,
+			QueueSize:            100,
+			TimeoutSeconds:       300, // 5 minutes per download
+			RetryOnFailure:       true,
+			CacheNegativeResults: true,
+			NegativeCacheTTL:     300, // 5 minutes
+		},
+		AutoDownloadModules: &AutoDownloadModulesConfig{
+			Enabled:              false, // Disabled by default for security
+			AllowedNamespaces:    []string{},
+			BlockedNamespaces:    []string{},
+			RateLimitPerMinute:   10,
+			MaxConcurrentDL:      3,
+			TimeoutSeconds:       300, // 5 minutes per download
+			CacheNegativeResults: true,
+			NegativeCacheTTL:     300, // 5 minutes
 		},
 	}
 }
@@ -216,4 +285,98 @@ func (c *DatabaseConfig) GetBackupInterval() time.Duration {
 // GetCacheTTL returns the cache TTL as a duration
 func (c *CacheConfig) GetCacheTTL() time.Duration {
 	return time.Duration(c.TTLSeconds) * time.Second
+}
+
+// GetTimeout returns the auto-download timeout as a duration
+func (c *AutoDownloadConfig) GetTimeout() time.Duration {
+	return time.Duration(c.TimeoutSeconds) * time.Second
+}
+
+// GetNegativeCacheTTL returns the negative cache TTL as a duration
+func (c *AutoDownloadConfig) GetNegativeCacheTTL() time.Duration {
+	return time.Duration(c.NegativeCacheTTL) * time.Second
+}
+
+// GetPlatforms returns the configured platforms, with defaults if empty
+func (c *AutoDownloadConfig) GetPlatforms() []string {
+	if len(c.Platforms) == 0 {
+		return []string{"linux_amd64", "windows_amd64"}
+	}
+	return c.Platforms
+}
+
+// IsNamespaceAllowed checks if a namespace is allowed for auto-download
+func (c *AutoDownloadConfig) IsNamespaceAllowed(namespace string) bool {
+	// Check blocked list first (takes precedence)
+	for _, blocked := range c.BlockedNamespaces {
+		if blocked == namespace {
+			return false
+		}
+	}
+
+	// If allowed list is empty, all non-blocked namespaces are allowed
+	if len(c.AllowedNamespaces) == 0 {
+		return true
+	}
+
+	// Check allowed list
+	for _, allowed := range c.AllowedNamespaces {
+		if allowed == namespace {
+			return true
+		}
+	}
+
+	return false
+}
+
+// GetDownloadRetryDelay returns the initial retry delay as a duration for modules
+func (c *ModulesConfig) GetDownloadRetryDelay() time.Duration {
+	return time.Duration(c.DownloadRetryInitialDelayMs) * time.Millisecond
+}
+
+// GetDownloadTimeout returns the download timeout as a duration for modules
+func (c *ModulesConfig) GetDownloadTimeout() time.Duration {
+	return time.Duration(c.DownloadTimeoutSeconds) * time.Second
+}
+
+// GetUpstreamRegistry returns the upstream registry, defaulting to registry.terraform.io
+func (c *ModulesConfig) GetUpstreamRegistry() string {
+	if c.UpstreamRegistry == "" {
+		return "registry.terraform.io"
+	}
+	return c.UpstreamRegistry
+}
+
+// GetTimeout returns the module auto-download timeout as a duration
+func (c *AutoDownloadModulesConfig) GetTimeout() time.Duration {
+	return time.Duration(c.TimeoutSeconds) * time.Second
+}
+
+// GetNegativeCacheTTL returns the module negative cache TTL as a duration
+func (c *AutoDownloadModulesConfig) GetNegativeCacheTTL() time.Duration {
+	return time.Duration(c.NegativeCacheTTL) * time.Second
+}
+
+// IsNamespaceAllowed checks if a namespace is allowed for module auto-download
+func (c *AutoDownloadModulesConfig) IsNamespaceAllowed(namespace string) bool {
+	// Check blocked list first (takes precedence)
+	for _, blocked := range c.BlockedNamespaces {
+		if blocked == namespace {
+			return false
+		}
+	}
+
+	// If allowed list is empty, all non-blocked namespaces are allowed
+	if len(c.AllowedNamespaces) == 0 {
+		return true
+	}
+
+	// Check allowed list
+	for _, allowed := range c.AllowedNamespaces {
+		if allowed == namespace {
+			return true
+		}
+	}
+
+	return false
 }

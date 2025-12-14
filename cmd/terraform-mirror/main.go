@@ -76,7 +76,19 @@ func main() {
 
 	// Initialize storage
 	ctx := context.Background()
-	store, err := storage.NewFromConfig(ctx, cfg.Storage)
+
+	// Construct base URL for local storage to serve files via HTTP
+	var storageBaseURL string
+	if cfg.Storage.Type == "local" {
+		scheme := "http"
+		if cfg.Server.TLSEnabled {
+			scheme = "https"
+		}
+		// Use localhost for local development; in production this should be configured
+		storageBaseURL = fmt.Sprintf("%s://localhost:%d", scheme, cfg.Server.Port)
+	}
+
+	store, err := storage.NewFromConfigWithBaseURL(ctx, cfg.Storage, storageBaseURL)
 	if err != nil {
 		log.Fatalf("Failed to initialize storage: %v", err)
 	}

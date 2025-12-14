@@ -84,8 +84,22 @@ providers {
   gpg_key_url = "https://www.hashicorp.com/.well-known/pgp-key.txt"
 }
 
+modules {
+  download_timeout_seconds = 600
+  download_retry_attempts = 3
+  download_retry_initial_delay_ms = 5000
+}
+
 quota {
   enabled = false
+}
+
+auto_download {
+  enabled = false
+  rate_limit_per_minute = 10
+  max_concurrent_downloads = 3
+  allowed_namespaces = ["hashicorp"]
+  timeout_seconds = 300
 }
 `
 

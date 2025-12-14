@@ -331,7 +331,6 @@ Phase 1 is complete when:
 - Checksum validation
 - Background download job processing
 - Rate limiting and quota management
-- Mirror of mirror support (chain caching)
 
 **Estimated Timeline: 4-6 weeks**
 

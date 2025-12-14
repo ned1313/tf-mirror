@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -163,8 +164,11 @@ func (s *Server) logAuditEvent(r *http.Request, action, resourceType, resourceID
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if err := s.auditRepo.Log(ctx, entry); err != nil {
-			// Just log the error, don't fail the request
-			fmt.Printf("Failed to create audit log: %v\n", err)
+			// Ignore "database is closed" errors during shutdown
+			// For other errors, log them but don't fail the request
+			if !strings.Contains(err.Error(), "database is closed") {
+				fmt.Printf("Failed to create audit log: %v\n", err)
+			}
 		}
 	}()
 }
@@ -184,12 +188,14 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 // Service discovery response for Terraform
 type ServiceDiscoveryResponse struct {
 	ProvidersV1 string `json:"providers.v1"`
+	ModulesV1   string `json:"modules.v1,omitempty"`
 }
 
 // handleServiceDiscovery implements the .well-known/terraform.json endpoint
 func (s *Server) handleServiceDiscovery(w http.ResponseWriter, r *http.Request) {
 	response := ServiceDiscoveryResponse{
 		ProvidersV1: "/v1/providers/",
+		ModulesV1:   "/v1/modules/",
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -389,12 +395,13 @@ func (s *Server) handleDeleteProvider(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleListJobs retrieves all jobs with pagination
-// GET /admin/api/jobs?limit=10&offset=0
+// handleListJobs retrieves all jobs with pagination and optional status filter
+// GET /admin/api/jobs?limit=10&offset=0&status=pending
 func (s *Server) handleListJobs(w http.ResponseWriter, r *http.Request) {
 	// Parse query parameters
 	limitStr := r.URL.Query().Get("limit")
 	offsetStr := r.URL.Query().Get("offset")
+	statusFilter := r.URL.Query().Get("status")
 
 	limit := 10 // default
 	offset := 0
@@ -411,8 +418,16 @@ func (s *Server) handleListJobs(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Get jobs from database
-	jobs, err := s.jobRepo.List(r.Context(), limit, offset)
+	// Get jobs from database (with optional status filter)
+	var jobs []*database.DownloadJob
+	var err error
+
+	if statusFilter != "" {
+		jobs, err = s.jobRepo.ListByStatus(r.Context(), statusFilter, limit, offset)
+	} else {
+		jobs, err = s.jobRepo.List(r.Context(), limit, offset)
+	}
+
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "database_error",
 			"Failed to retrieve jobs")

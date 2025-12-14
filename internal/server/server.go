@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -17,7 +18,9 @@ import (
 	"github.com/ned1313/terraform-mirror/internal/config"
 	"github.com/ned1313/terraform-mirror/internal/database"
 	"github.com/ned1313/terraform-mirror/internal/metrics"
+	"github.com/ned1313/terraform-mirror/internal/module"
 	"github.com/ned1313/terraform-mirror/internal/processor"
+	"github.com/ned1313/terraform-mirror/internal/provider"
 	"github.com/ned1313/terraform-mirror/internal/storage"
 )
 
@@ -33,11 +36,14 @@ type Server struct {
 	metrics *metrics.Metrics
 
 	// Services
-	authService      *auth.Service
-	processorService *processor.Service
+	authService               *auth.Service
+	processorService          *processor.Service
+	autoDownloadService       *provider.AutoDownloadService
+	moduleAutoDownloadService *module.AutoDownloadService
 
 	// Repositories
 	providerRepo *database.ProviderRepository
+	moduleRepo   *database.ModuleRepository
 	jobRepo      *database.JobRepository
 	auditRepo    *database.AuditRepository
 }
@@ -48,7 +54,7 @@ func New(cfg *config.Config, db *database.DB, storage storage.Storage) *Server {
 }
 
 // NewWithCache creates a new HTTP server instance with an optional cache
-func NewWithCache(cfg *config.Config, db *database.DB, storage storage.Storage, c cache.Cache) *Server {
+func NewWithCache(cfg *config.Config, db *database.DB, storageBackend storage.Storage, c cache.Cache) *Server {
 	// Create auth service
 	authService := auth.NewService(
 		cfg.Auth.JWTSecret,
@@ -66,7 +72,33 @@ func NewWithCache(cfg *config.Config, db *database.DB, storage storage.Storage, 
 	}
 	// Default hostname for provider storage keys
 	hostname := "registry.terraform.io"
-	processorService := processor.NewService(processorConfig, db, storage, hostname)
+	processorService := processor.NewService(processorConfig, db, storageBackend, hostname)
+
+	// Create auto-download service if enabled
+	var autoDownloadSvc *provider.AutoDownloadService
+	if cfg.AutoDownload != nil && cfg.AutoDownload.Enabled {
+		autoDownloadSvc = provider.NewAutoDownloadService(
+			cfg.AutoDownload,
+			&cfg.Providers,
+			storageBackend,
+			db,
+		)
+		log.Printf("Auto-download enabled: rate limit %d/min, max concurrent %d",
+			cfg.AutoDownload.RateLimitPerMinute, cfg.AutoDownload.MaxConcurrentDL)
+	}
+
+	// Create module auto-download service if enabled
+	var moduleAutoDownloadSvc *module.AutoDownloadService
+	if cfg.AutoDownloadModules != nil && cfg.AutoDownloadModules.Enabled {
+		moduleAutoDownloadSvc = module.NewAutoDownloadService(
+			cfg.AutoDownloadModules,
+			&cfg.Modules,
+			storageBackend,
+			db,
+		)
+		log.Printf("Module auto-download enabled: rate limit %d/min, max concurrent %d",
+			cfg.AutoDownloadModules.RateLimitPerMinute, cfg.AutoDownloadModules.MaxConcurrentDL)
+	}
 
 	// Use NoOp cache if none provided
 	if c == nil {
@@ -81,17 +113,20 @@ func NewWithCache(cfg *config.Config, db *database.DB, storage storage.Storage, 
 	}
 
 	s := &Server{
-		config:           cfg,
-		db:               db,
-		storage:          storage,
-		cache:            c,
-		logger:           log.Default(),
-		metrics:          m,
-		authService:      authService,
-		processorService: processorService,
-		providerRepo:     database.NewProviderRepository(db),
-		jobRepo:          database.NewJobRepository(db),
-		auditRepo:        database.NewAuditRepository(db),
+		config:                    cfg,
+		db:                        db,
+		storage:                   storageBackend,
+		cache:                     c,
+		logger:                    log.Default(),
+		metrics:                   m,
+		authService:               authService,
+		processorService:          processorService,
+		autoDownloadService:       autoDownloadSvc,
+		moduleAutoDownloadService: moduleAutoDownloadSvc,
+		providerRepo:              database.NewProviderRepository(db),
+		moduleRepo:                database.NewModuleRepository(db),
+		jobRepo:                   database.NewJobRepository(db),
+		auditRepo:                 database.NewAuditRepository(db),
 	}
 
 	s.setupRouter()
@@ -124,11 +159,9 @@ func (s *Server) setupRouter() {
 		r.Get("/terraform.json", s.handleServiceDiscovery)
 	})
 
-	// Provider Registry Protocol endpoints (public, no auth)
-	r.Route("/v1/providers", func(r chi.Router) {
-		r.Get("/{namespace}/{type}/versions", s.handleProviderVersions)
-		r.Get("/{namespace}/{type}/{version}/download/{os}/{arch}", s.handleProviderDownload)
-	})
+	// Blob download endpoint for local storage (public, no auth)
+	// This serves provider files when using local storage instead of S3
+	r.Get("/blobs/*", s.handleBlobDownload)
 
 	// Admin UI static files - served from web/dist directory
 	// Must be before the catch-all route
@@ -141,6 +174,19 @@ func (s *Server) setupRouter() {
 	} else {
 		log.Printf("Warning: Admin UI static files not found, admin UI will not be available")
 	}
+
+	// Metrics endpoint (if telemetry is enabled) - must be before catch-all
+	if s.config.Telemetry.Enabled {
+		r.Get("/metrics", s.handleMetrics)
+	}
+
+	// Module Registry Protocol endpoints (public, no auth)
+	// Pattern: /v1/modules/{namespace}/{name}/{system}/versions
+	// Pattern: /v1/modules/{namespace}/{name}/{system}/{version}/download
+	r.Route("/v1/modules", func(r chi.Router) {
+		r.Get("/{namespace}/{name}/{system}/versions", s.handleModuleVersions)
+		r.Get("/{namespace}/{name}/{system}/{version}/download", s.handleModuleDownload)
+	})
 
 	// Provider Network Mirror Protocol endpoints (public, no auth)
 	// Pattern: /{hostname}/{namespace}/{type}/index.json
@@ -165,6 +211,13 @@ func (s *Server) setupRouter() {
 			r.Put("/providers/{id}", s.handleUpdateProvider)
 			r.Delete("/providers/{id}", s.handleDeleteProvider)
 
+			// Module management
+			r.Post("/modules/load", s.handleLoadModules)
+			r.Get("/modules", s.handleListModules)
+			r.Get("/modules/{id}", s.handleGetModule)
+			r.Put("/modules/{id}", s.handleUpdateModule)
+			r.Delete("/modules/{id}", s.handleDeleteModule)
+
 			// Job management
 			r.Get("/jobs", s.handleListJobs)
 			r.Get("/jobs/{id}", s.handleGetJob)
@@ -188,11 +241,6 @@ func (s *Server) setupRouter() {
 			r.Post("/backup", s.handleTriggerBackup)
 		})
 	})
-
-	// Metrics endpoint (if telemetry is enabled)
-	if s.config.Telemetry.Enabled {
-		r.Get("/metrics", s.handleMetrics)
-	}
 
 	s.router = r
 }
@@ -312,4 +360,43 @@ func (s *Server) serveAdminUI(webDir string) http.HandlerFunc {
 		// For SPA routing - serve index.html for all other routes
 		http.ServeFile(w, r, filepath.Join(webDir, "index.html"))
 	}
+}
+
+// handleBlobDownload serves provider binary files from local storage
+func (s *Server) handleBlobDownload(w http.ResponseWriter, r *http.Request) {
+	// Get the blob key from the URL path (strip /blobs/ prefix)
+	key := strings.TrimPrefix(r.URL.Path, "/blobs/")
+	if key == "" {
+		http.NotFound(w, r)
+		return
+	}
+
+	// Download from storage
+	reader, err := s.storage.Download(r.Context(), key)
+	if err != nil {
+		s.logger.Printf("Failed to download blob %s: %v", key, err)
+		http.NotFound(w, r)
+		return
+	}
+	defer reader.Close()
+
+	// Read the data
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		s.logger.Printf("Failed to read blob %s: %v", key, err)
+		http.Error(w, "Failed to read file", http.StatusInternalServerError)
+		return
+	}
+
+	// Set content type based on file extension
+	contentType := "application/octet-stream"
+	if strings.HasSuffix(key, ".zip") {
+		contentType = "application/zip"
+	}
+
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(data)))
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filepath.Base(key)))
+	w.WriteHeader(http.StatusOK)
+	w.Write(data)
 }

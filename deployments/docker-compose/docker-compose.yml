@@ -16,8 +16,10 @@ services:
       - TFM_STORAGE_ENDPOINT=http://minio:9000
       - TFM_STORAGE_ACCESS_KEY=minioadmin
       - TFM_STORAGE_SECRET_KEY=minioadmin
+      - TFM_STORAGE_FORCE_PATH_STYLE=true
       - TFM_ADMIN_USERNAME=admin
       - TFM_ADMIN_PASSWORD=changeme123
+      - TFM_TELEMETRY_ENABLED=true
     volumes:
       - terraform-mirror-data:/data
       - terraform-mirror-cache:/var/cache/tf-mirror

@@ -9,6 +9,11 @@ import (
 
 // NewFromConfig creates a storage instance from application configuration
 func NewFromConfig(ctx context.Context, cfg config.StorageConfig) (Storage, error) {
+	return NewFromConfigWithBaseURL(ctx, cfg, "")
+}
+
+// NewFromConfigWithBaseURL creates a storage instance with an optional base URL for local storage
+func NewFromConfigWithBaseURL(ctx context.Context, cfg config.StorageConfig, baseURL string) (Storage, error) {
 	switch cfg.Type {
 	case "s3":
 		return NewS3Storage(ctx, S3Config{
@@ -27,6 +32,7 @@ func NewFromConfig(ctx context.Context, cfg config.StorageConfig) (Storage, erro
 		}
 		return NewLocalStorage(LocalConfig{
 			BasePath: basePath,
+			BaseURL:  baseURL,
 		})
 	default:
 		return nil, fmt.Errorf("unsupported storage type: %s (supported: s3, local)", cfg.Type)

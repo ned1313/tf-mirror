@@ -94,10 +94,13 @@ type AdminAction struct {
 	CreatedAt time.Time
 }
 
-// DownloadJob represents a provider download job
+// DownloadJob represents a provider or module download job
 type DownloadJob struct {
 	ID     int64
 	UserID sql.NullInt64
+
+	// Job type
+	JobType string // 'provider', 'module'
 
 	// Job configuration
 	SourceType string // 'hcl', 'api'
@@ -150,5 +153,56 @@ type DownloadJobItem struct {
 	// Timestamps
 	CreatedAt   time.Time
 	StartedAt   sql.NullTime
+	CompletedAt sql.NullTime
+}
+
+// Module represents a cached Terraform module
+type Module struct {
+	ID        int64
+	Namespace string // e.g., "terraform-aws-modules"
+	Name      string // e.g., "vpc"
+	System    string // e.g., "aws"
+	Version   string // e.g., "5.0.0"
+
+	// Storage information
+	S3Key     string
+	Filename  string
+	SizeBytes int64
+
+	// Original source tracking
+	OriginalSourceURL sql.NullString
+
+	// Status flags
+	Deprecated bool
+	Blocked    bool
+
+	// Timestamps
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+// ModuleJobItem represents a single module in a download job
+type ModuleJobItem struct {
+	ID    int64
+	JobID int64
+
+	// Module identity
+	Namespace string
+	Name      string
+	System    string
+	Version   string
+
+	// Item status
+	Status string // pending, downloading, completed, failed
+
+	// Results
+	ModuleID     sql.NullInt64
+	ErrorMessage sql.NullString
+
+	// Retry tracking
+	RetryCount int
+
+	// Timestamps
+	CreatedAt   time.Time
 	CompletedAt sql.NullTime
 }

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ned1313/terraform-mirror/internal/database"
+	"github.com/ned1313/terraform-mirror/internal/module"
 	"github.com/ned1313/terraform-mirror/internal/provider"
 	"github.com/ned1313/terraform-mirror/internal/storage"
 )
@@ -26,13 +27,16 @@ type Config struct {
 
 // Service manages background job processing
 type Service struct {
-	config       Config
-	db           *database.DB
-	jobRepo      *database.JobRepository
-	providerRepo *database.ProviderRepository
-	storage      storage.Storage
-	registry     provider.RegistryDownloader
-	hostname     string // Hostname for storage keys (e.g., "registry.terraform.io")
+	config        Config
+	db            *database.DB
+	jobRepo       *database.JobRepository
+	providerRepo  *database.ProviderRepository
+	moduleRepo    *database.ModuleRepository
+	moduleJobRepo *database.ModuleJobRepository
+	storage       storage.Storage
+	registry      provider.RegistryDownloader
+	moduleService *module.Service
+	hostname      string // Hostname for storage keys (e.g., "registry.terraform.io")
 
 	mu       sync.Mutex
 	running  bool
@@ -47,16 +51,19 @@ type Service struct {
 // NewService creates a new processor service
 func NewService(config Config, db *database.DB, store storage.Storage, hostname string) *Service {
 	return &Service{
-		config:       config,
-		db:           db,
-		jobRepo:      database.NewJobRepository(db),
-		providerRepo: database.NewProviderRepository(db),
-		storage:      store,
-		registry:     provider.NewRegistryClient(),
-		hostname:     hostname,
-		stopCh:       make(chan struct{}),
-		doneCh:       make(chan struct{}),
-		activeJobs:   make(map[int64]context.CancelFunc),
+		config:        config,
+		db:            db,
+		jobRepo:       database.NewJobRepository(db),
+		providerRepo:  database.NewProviderRepository(db),
+		moduleRepo:    database.NewModuleRepository(db),
+		moduleJobRepo: database.NewModuleJobRepository(db),
+		storage:       store,
+		registry:      provider.NewRegistryClient(),
+		moduleService: module.NewService(store, db, hostname),
+		hostname:      hostname,
+		stopCh:        make(chan struct{}),
+		doneCh:        make(chan struct{}),
+		activeJobs:    make(map[int64]context.CancelFunc),
 	}
 }
 
@@ -247,6 +254,20 @@ func (s *Service) processJob(ctx context.Context, job *database.DownloadJob) err
 		return fmt.Errorf("failed to update job status: %w", err)
 	}
 
+	// Dispatch based on job type
+	switch job.JobType {
+	case "module":
+		return s.processModuleJob(ctx, job)
+	case "provider", "":
+		// Empty job type defaults to provider for backwards compatibility
+		return s.processProviderJob(ctx, job)
+	default:
+		return s.failJob(ctx, job, fmt.Errorf("unknown job type: %s", job.JobType))
+	}
+}
+
+// processProviderJob processes a provider download job
+func (s *Service) processProviderJob(ctx context.Context, job *database.DownloadJob) error {
 	// Get job items
 	items, err := s.jobRepo.GetItems(ctx, job.ID)
 	if err != nil {
@@ -460,4 +481,135 @@ func (s *Service) GetStatus() map[string]interface{} {
 		"active_jobs":         len(s.activeJobs),
 		"max_concurrent_jobs": s.config.MaxConcurrentJobs,
 	}
+}
+
+// processModuleJob processes a module download job
+func (s *Service) processModuleJob(ctx context.Context, job *database.DownloadJob) error {
+	// Get module job items
+	items, err := s.moduleJobRepo.ListByJob(ctx, job.ID)
+	if err != nil {
+		return s.failJob(ctx, job, fmt.Errorf("failed to get module job items: %w", err))
+	}
+
+	if len(items) == 0 {
+		return s.failJob(ctx, job, fmt.Errorf("job has no items to process"))
+	}
+
+	// Process each item
+	for _, item := range items {
+		if item.Status == "completed" {
+			continue // Skip already completed items
+		}
+
+		// Check if context was cancelled
+		select {
+		case <-ctx.Done():
+			return s.failJob(ctx, job, fmt.Errorf("job cancelled"))
+		default:
+		}
+
+		// Process the module item
+		if err := s.processModuleJobItem(ctx, job, item); err != nil {
+			log.Printf("Job %d module item %d failed: %v", job.ID, item.ID, err)
+			job.FailedItems++
+		} else {
+			job.CompletedItems++
+		}
+
+		// Update job progress
+		job.Progress = (job.CompletedItems * 100) / job.TotalItems
+		if err := s.jobRepo.Update(ctx, job); err != nil {
+			log.Printf("Failed to update job progress: %v", err)
+		}
+	}
+
+	// Mark job as completed or failed
+	if job.FailedItems == 0 {
+		job.Status = "completed"
+	} else if job.CompletedItems == 0 {
+		job.Status = "failed"
+	} else {
+		job.Status = "completed" // Partial success
+	}
+
+	job.CompletedAt.Time = time.Now()
+	job.CompletedAt.Valid = true
+
+	if err := s.jobRepo.Update(ctx, job); err != nil {
+		return fmt.Errorf("failed to update job final status: %w", err)
+	}
+
+	return nil
+}
+
+// processModuleJobItem processes a single module job item
+func (s *Service) processModuleJobItem(ctx context.Context, job *database.DownloadJob, item *database.ModuleJobItem) error {
+	// Check if module already exists in database
+	existingModule, err := s.moduleRepo.GetByIdentity(ctx, item.Namespace, item.Name, item.System, item.Version)
+	if err != nil {
+		return s.failModuleItem(ctx, item, fmt.Errorf("failed to check existing module: %w", err))
+	}
+	if existingModule != nil {
+		// Module already exists, mark as completed and link to existing module
+		item.Status = "completed"
+		item.ModuleID = sql.NullInt64{Int64: existingModule.ID, Valid: true}
+		item.CompletedAt.Time = time.Now()
+		item.CompletedAt.Valid = true
+		if err := s.moduleJobRepo.UpdateItem(ctx, item); err != nil {
+			return fmt.Errorf("failed to update item: %w", err)
+		}
+		log.Printf("Job %d item %d: Module %s/%s/%s %s already exists, skipping download",
+			job.ID, item.ID, item.Namespace, item.Name, item.System, item.Version)
+		return nil
+	}
+
+	// Update item status to downloading
+	item.Status = "downloading"
+	if err := s.moduleJobRepo.UpdateItem(ctx, item); err != nil {
+		return fmt.Errorf("failed to update item status: %w", err)
+	}
+
+	log.Printf("Job %d item %d: Downloading module %s/%s/%s %s",
+		job.ID, item.ID, item.Namespace, item.Name, item.System, item.Version)
+
+	// Use the module service to download and process the module
+	result := s.moduleService.LoadSingleModule(ctx, item.Namespace, item.Name, item.System, item.Version)
+	if !result.Success {
+		return s.failModuleItem(ctx, item, result.Error)
+	}
+
+	// Get the created module to link it
+	createdModule, err := s.moduleRepo.GetByIdentity(ctx, item.Namespace, item.Name, item.System, item.Version)
+	if err != nil || createdModule == nil {
+		return s.failModuleItem(ctx, item, fmt.Errorf("module not found after creation"))
+	}
+
+	// Mark item as completed
+	item.Status = "completed"
+	item.ModuleID = sql.NullInt64{Int64: createdModule.ID, Valid: true}
+	item.CompletedAt.Time = time.Now()
+	item.CompletedAt.Valid = true
+
+	if err := s.moduleJobRepo.UpdateItem(ctx, item); err != nil {
+		return fmt.Errorf("failed to update item completion: %w", err)
+	}
+
+	log.Printf("Job %d item %d: Successfully downloaded and stored module %s/%s/%s %s - %d bytes",
+		job.ID, item.ID, item.Namespace, item.Name, item.System, item.Version, createdModule.SizeBytes)
+
+	return nil
+}
+
+// failModuleItem marks a module job item as failed with an error message
+func (s *Service) failModuleItem(ctx context.Context, item *database.ModuleJobItem, err error) error {
+	item.Status = "failed"
+	item.ErrorMessage = sql.NullString{String: err.Error(), Valid: true}
+	item.CompletedAt.Time = time.Now()
+	item.CompletedAt.Valid = true
+
+	if updateErr := s.moduleJobRepo.UpdateItem(ctx, item); updateErr != nil {
+		log.Printf("Failed to update module item status: %v", updateErr)
+	}
+
+	return err
 }

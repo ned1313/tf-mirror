@@ -14,11 +14,13 @@ import (
 // This is primarily for testing and development
 type LocalStorage struct {
 	basePath string
+	baseURL  string // Base URL for generating download URLs (e.g., "http://localhost:8080")
 }
 
 // LocalConfig contains configuration for local filesystem storage
 type LocalConfig struct {
 	BasePath string // Base directory for storage
+	BaseURL  string // Base URL for generating download URLs
 }
 
 // NewLocalStorage creates a new local filesystem storage
@@ -34,6 +36,7 @@ func NewLocalStorage(cfg LocalConfig) (*LocalStorage, error) {
 
 	return &LocalStorage{
 		basePath: cfg.BasePath,
+		baseURL:  cfg.BaseURL,
 	}, nil
 }
 
@@ -162,8 +165,9 @@ func (l *LocalStorage) Exists(ctx context.Context, key string) (bool, error) {
 	return true, nil
 }
 
-// GetPresignedURL generates a "presigned" URL for local storage
-// Note: This is a simplified implementation that just returns a file:// URL
+// GetPresignedURL generates a download URL for local storage
+// Returns an HTTP URL via the /blobs/ endpoint if baseURL is configured,
+// otherwise falls back to file:// URL (which only works for local testing)
 func (l *LocalStorage) GetPresignedURL(ctx context.Context, key string, expiration time.Duration) (string, error) {
 	if key == "" {
 		return "", fmt.Errorf("key cannot be empty")
@@ -182,7 +186,14 @@ func (l *LocalStorage) GetPresignedURL(ctx context.Context, key string, expirati
 		return "", fmt.Errorf("file not found: %w", err)
 	}
 
-	// Return file:// URL (note: this doesn't actually expire)
+	// If baseURL is configured, return HTTP URL via blob endpoint
+	if l.baseURL != "" {
+		// Normalize key for URL (use forward slashes)
+		urlKey := strings.ReplaceAll(key, "\\", "/")
+		return fmt.Sprintf("%s/blobs/%s", strings.TrimSuffix(l.baseURL, "/"), urlKey), nil
+	}
+
+	// Fall back to file:// URL (only works for local testing)
 	return "file://" + filepath.ToSlash(fullPath), nil
 }
 

@@ -74,6 +74,11 @@ func (m *mockRegistryClient) DownloadProviderComplete(ctx context.Context, names
 	}
 }
 
+func (m *mockRegistryClient) GetAvailableVersions(ctx context.Context, namespace, providerType string) ([]string, error) {
+	// Return some mock versions
+	return []string{"1.0.0", "1.1.0", "2.0.0"}, nil
+}
+
 func (m *mockStorage) GetPresignedURL(ctx context.Context, key string, expiration time.Duration) (string, error) {
 	return "https://mock-presigned-url/" + key, nil
 }
