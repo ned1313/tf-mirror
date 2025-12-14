@@ -10,9 +10,11 @@ Terraform Mirror provides two categories of APIs:
 - [Authentication](#authentication)
 - [Error Handling](#error-handling)
 - [Provider Mirror Protocol](#provider-mirror-protocol)
+- [Module Registry Protocol](#module-registry-protocol)
 - [Admin API](#admin-api)
   - [Authentication Endpoints](#authentication-endpoints)
   - [Provider Management](#provider-management)
+  - [Module Management](#module-management)
   - [Job Management](#job-management)
   - [Statistics & Monitoring](#statistics--monitoring)
   - [System Administration](#system-administration)
@@ -101,7 +103,8 @@ Terraform clients first query this endpoint to discover available services.
 
 ```json
 {
-  "providers.v1": "/v1/providers/"
+  "providers.v1": "/v1/providers/",
+  "modules.v1": "/v1/modules/"
 }
 ```
 
@@ -207,6 +210,79 @@ Returns server health status.
   "status": "healthy",
   "version": "0.1.0"
 }
+```
+
+---
+
+## Module Registry Protocol
+
+These endpoints implement the [Terraform Module Registry Protocol](https://developer.hashicorp.com/terraform/internals/module-registry-protocol) for serving cached modules.
+
+### List Module Versions
+
+Returns available versions for a module.
+
+**Endpoint:** `GET /v1/modules/{namespace}/{name}/{system}/versions`
+
+**Path Parameters:**
+
+| Parameter | Description | Example |
+|-----------|-------------|---------|
+| `namespace` | Module namespace | `hashicorp` |
+| `name` | Module name | `consul` |
+| `system` | Target system/provider | `aws` |
+
+**Response:**
+
+```json
+{
+  "modules": [
+    {
+      "versions": [
+        {"version": "0.11.0"},
+        {"version": "0.10.0"}
+      ]
+    }
+  ]
+}
+```
+
+**Example:**
+
+```bash
+curl http://localhost:8080/v1/modules/hashicorp/consul/aws/versions
+```
+
+---
+
+### Download Module
+
+Returns the download URL for a specific module version. The actual module tarball location is returned in the `X-Terraform-Get` header.
+
+**Endpoint:** `GET /v1/modules/{namespace}/{name}/{system}/{version}/download`
+
+**Path Parameters:**
+
+| Parameter | Description | Example |
+|-----------|-------------|---------|
+| `namespace` | Module namespace | `hashicorp` |
+| `name` | Module name | `consul` |
+| `system` | Target system/provider | `aws` |
+| `version` | Module version | `0.11.0` |
+
+**Response:** `204 No Content`
+
+**Response Headers:**
+
+| Header | Description |
+|--------|-------------|
+| `X-Terraform-Get` | URL to download the module tarball |
+
+**Example:**
+
+```bash
+curl -I http://localhost:8080/v1/modules/hashicorp/consul/aws/0.11.0/download
+# X-Terraform-Get: https://storage.example.com/modules/hashicorp/consul/aws/0.11.0/module.tar.gz
 ```
 
 ---
@@ -470,6 +546,160 @@ Delete a provider and its storage object.
 
 ```bash
 curl -X DELETE http://localhost:8080/admin/api/providers/1 \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+---
+
+## Module Management
+
+### Load Modules from HCL
+
+Upload an HCL file to load module definitions and trigger downloads.
+
+**Endpoint:** `POST /admin/api/modules/load`
+
+**Content-Type:** `multipart/form-data`
+
+**Form Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `file` | file | HCL file containing module definitions |
+
+**HCL Format:**
+
+```hcl
+module "hashicorp/consul/aws" {
+  versions = ["0.11.0", "0.10.0"]
+}
+
+module "hashicorp/vpc/aws" {
+  versions = ["5.0.0"]
+}
+```
+
+**Response:**
+
+```json
+{
+  "message": "Module load job created",
+  "job_id": 5,
+  "modules_found": 2
+}
+```
+
+**Example:**
+
+```bash
+curl -X POST http://localhost:8080/admin/api/modules/load \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "file=@modules.hcl"
+```
+
+---
+
+### List Modules
+
+List all cached modules with pagination.
+
+**Endpoint:** `GET /admin/api/modules`
+
+**Query Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `limit` | int | 50 | Items per page (max 100) |
+| `offset` | int | 0 | Pagination offset |
+| `namespace` | string | - | Filter by namespace |
+| `name` | string | - | Filter by name |
+| `system` | string | - | Filter by system |
+
+**Response:**
+
+```json
+{
+  "modules": [
+    {
+      "id": 1,
+      "namespace": "hashicorp",
+      "name": "consul",
+      "system": "aws",
+      "version": "0.11.0",
+      "source_url": "git::https://github.com/hashicorp/terraform-aws-consul?ref=v0.11.0",
+      "storage_path": "modules/hashicorp/consul/aws/0.11.0/module.tar.gz",
+      "file_size": 125432,
+      "status": "available",
+      "created_at": "2025-12-14T12:00:00Z",
+      "updated_at": "2025-12-14T12:01:00Z"
+    }
+  ],
+  "total": 1,
+  "limit": 50,
+  "offset": 0
+}
+```
+
+**Example:**
+
+```bash
+curl http://localhost:8080/admin/api/modules \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+---
+
+### Get Module
+
+Get details of a specific module version.
+
+**Endpoint:** `GET /admin/api/modules/{id}`
+
+**Response:**
+
+```json
+{
+  "id": 1,
+  "namespace": "hashicorp",
+  "name": "consul",
+  "system": "aws",
+  "version": "0.11.0",
+  "source_url": "git::https://github.com/hashicorp/terraform-aws-consul?ref=v0.11.0",
+  "storage_path": "modules/hashicorp/consul/aws/0.11.0/module.tar.gz",
+  "file_size": 125432,
+  "status": "available",
+  "created_at": "2025-12-14T12:00:00Z",
+  "updated_at": "2025-12-14T12:01:00Z"
+}
+```
+
+**Example:**
+
+```bash
+curl http://localhost:8080/admin/api/modules/1 \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+---
+
+### Delete Module
+
+Delete a module version and its storage object.
+
+**Endpoint:** `DELETE /admin/api/modules/{id}`
+
+**Response:**
+
+```json
+{
+  "message": "Module deleted successfully"
+}
+```
+
+**Example:**
+
+```bash
+curl -X DELETE http://localhost:8080/admin/api/modules/1 \
   -H "Authorization: Bearer $TOKEN"
 ```
 

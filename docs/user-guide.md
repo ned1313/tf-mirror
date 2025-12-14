@@ -13,6 +13,8 @@ This guide covers day-to-day usage of Terraform Mirror for both administrators a
   - [Web UI Overview](#web-ui-overview)
   - [Loading Providers](#loading-providers)
   - [Managing Providers](#managing-providers)
+  - [Loading Modules](#loading-modules)
+  - [Managing Modules](#managing-modules)
   - [Monitoring Jobs](#monitoring-jobs)
   - [Viewing Statistics](#viewing-statistics)
   - [Audit Logs](#audit-logs)
@@ -25,9 +27,9 @@ This guide covers day-to-day usage of Terraform Mirror for both administrators a
 Terraform Mirror acts as a caching proxy between your Terraform clients and the public Terraform Registry. It provides:
 
 - **Offline Access**: Use Terraform in air-gapped environments
-- **Faster Downloads**: Cached providers download quickly from local storage
+- **Faster Downloads**: Cached providers and modules download quickly from local storage
 - **Bandwidth Savings**: Multiple teams share a single cached copy
-- **Version Control**: Explicitly manage which provider versions are available
+- **Version Control**: Explicitly manage which provider and module versions are available
 - **Audit Trail**: Track all provider downloads and administrative actions
 
 ---
@@ -317,6 +319,83 @@ Remove providers to free storage:
 3. Confirm deletion
 
 **Warning:** This removes the provider from storage. Terraform clients will no longer be able to download it.
+
+---
+
+### Loading Modules
+
+Similar to providers, you can load modules from an HCL file.
+
+#### Creating a Module Definition File
+
+```hcl
+# modules.hcl
+
+module "hashicorp/consul/aws" {
+  versions = ["0.11.0", "0.10.0"]
+}
+
+module "hashicorp/vpc/aws" {
+  versions = ["5.0.0", "4.0.0"]
+}
+
+module "terraform-aws-modules/eks/aws" {
+  versions = ["20.0.0"]
+}
+```
+
+#### Module Naming Convention
+
+Modules use a three-part naming convention: `namespace/name/system`
+
+- **namespace**: Usually the organization (e.g., `hashicorp`, `terraform-aws-modules`)
+- **name**: The module name (e.g., `consul`, `vpc`, `eks`)
+- **system**: The target provider/system (e.g., `aws`, `azurerm`, `google`)
+
+#### Uploading via Web UI
+
+1. Navigate to the Registry tab
+2. Select the Modules section
+3. Click "Load Modules"
+4. Upload your HCL file
+5. Monitor job progress
+
+#### Uploading via API
+
+```bash
+curl -X POST http://localhost:8080/admin/api/modules/load \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "file=@modules.hcl"
+```
+
+---
+
+### Managing Modules
+
+#### Viewing Modules
+
+Navigate to the Registry tab and select Modules to see:
+
+- Namespace, name, system, version
+- Storage path and file size
+- Download status
+- Source URL (Git or HTTP)
+
+#### Module Storage
+
+Modules are stored as tarballs (`.tar.gz`) in the configured storage backend under `modules/{namespace}/{name}/{system}/{version}/`.
+
+#### Deleting Modules
+
+Remove modules to free storage:
+
+1. Find the module in the list
+2. Click Delete
+3. Confirm deletion
+
+**Warning:** This removes the module from storage. Terraform clients will no longer be able to download it.
+
+---
 
 ### Monitoring Jobs
 

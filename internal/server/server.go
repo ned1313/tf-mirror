@@ -18,6 +18,7 @@ import (
 	"github.com/ned1313/terraform-mirror/internal/config"
 	"github.com/ned1313/terraform-mirror/internal/database"
 	"github.com/ned1313/terraform-mirror/internal/metrics"
+	"github.com/ned1313/terraform-mirror/internal/module"
 	"github.com/ned1313/terraform-mirror/internal/processor"
 	"github.com/ned1313/terraform-mirror/internal/provider"
 	"github.com/ned1313/terraform-mirror/internal/storage"
@@ -35,12 +36,14 @@ type Server struct {
 	metrics *metrics.Metrics
 
 	// Services
-	authService         *auth.Service
-	processorService    *processor.Service
-	autoDownloadService *provider.AutoDownloadService
+	authService               *auth.Service
+	processorService          *processor.Service
+	autoDownloadService       *provider.AutoDownloadService
+	moduleAutoDownloadService *module.AutoDownloadService
 
 	// Repositories
 	providerRepo *database.ProviderRepository
+	moduleRepo   *database.ModuleRepository
 	jobRepo      *database.JobRepository
 	auditRepo    *database.AuditRepository
 }
@@ -84,6 +87,19 @@ func NewWithCache(cfg *config.Config, db *database.DB, storageBackend storage.St
 			cfg.AutoDownload.RateLimitPerMinute, cfg.AutoDownload.MaxConcurrentDL)
 	}
 
+	// Create module auto-download service if enabled
+	var moduleAutoDownloadSvc *module.AutoDownloadService
+	if cfg.AutoDownloadModules != nil && cfg.AutoDownloadModules.Enabled {
+		moduleAutoDownloadSvc = module.NewAutoDownloadService(
+			cfg.AutoDownloadModules,
+			&cfg.Modules,
+			storageBackend,
+			db,
+		)
+		log.Printf("Module auto-download enabled: rate limit %d/min, max concurrent %d",
+			cfg.AutoDownloadModules.RateLimitPerMinute, cfg.AutoDownloadModules.MaxConcurrentDL)
+	}
+
 	// Use NoOp cache if none provided
 	if c == nil {
 		c = cache.NewNoOpCache()
@@ -97,18 +113,20 @@ func NewWithCache(cfg *config.Config, db *database.DB, storageBackend storage.St
 	}
 
 	s := &Server{
-		config:              cfg,
-		db:                  db,
-		storage:             storageBackend,
-		cache:               c,
-		logger:              log.Default(),
-		metrics:             m,
-		authService:         authService,
-		processorService:    processorService,
-		autoDownloadService: autoDownloadSvc,
-		providerRepo:        database.NewProviderRepository(db),
-		jobRepo:             database.NewJobRepository(db),
-		auditRepo:           database.NewAuditRepository(db),
+		config:                    cfg,
+		db:                        db,
+		storage:                   storageBackend,
+		cache:                     c,
+		logger:                    log.Default(),
+		metrics:                   m,
+		authService:               authService,
+		processorService:          processorService,
+		autoDownloadService:       autoDownloadSvc,
+		moduleAutoDownloadService: moduleAutoDownloadSvc,
+		providerRepo:              database.NewProviderRepository(db),
+		moduleRepo:                database.NewModuleRepository(db),
+		jobRepo:                   database.NewJobRepository(db),
+		auditRepo:                 database.NewAuditRepository(db),
 	}
 
 	s.setupRouter()
@@ -162,6 +180,14 @@ func (s *Server) setupRouter() {
 		r.Get("/metrics", s.handleMetrics)
 	}
 
+	// Module Registry Protocol endpoints (public, no auth)
+	// Pattern: /v1/modules/{namespace}/{name}/{system}/versions
+	// Pattern: /v1/modules/{namespace}/{name}/{system}/{version}/download
+	r.Route("/v1/modules", func(r chi.Router) {
+		r.Get("/{namespace}/{name}/{system}/versions", s.handleModuleVersions)
+		r.Get("/{namespace}/{name}/{system}/{version}/download", s.handleModuleDownload)
+	})
+
 	// Provider Network Mirror Protocol endpoints (public, no auth)
 	// Pattern: /{hostname}/{namespace}/{type}/index.json
 	// Pattern: /{hostname}/{namespace}/{type}/{version}.json
@@ -184,6 +210,13 @@ func (s *Server) setupRouter() {
 			r.Get("/providers/{id}", s.handleGetProvider)
 			r.Put("/providers/{id}", s.handleUpdateProvider)
 			r.Delete("/providers/{id}", s.handleDeleteProvider)
+
+			// Module management
+			r.Post("/modules/load", s.handleLoadModules)
+			r.Get("/modules", s.handleListModules)
+			r.Get("/modules/{id}", s.handleGetModule)
+			r.Put("/modules/{id}", s.handleUpdateModule)
+			r.Delete("/modules/{id}", s.handleDeleteModule)
 
 			// Job management
 			r.Get("/jobs", s.handleListJobs)

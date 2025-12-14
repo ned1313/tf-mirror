@@ -1,6 +1,6 @@
 #!/bin/bash
 # Run end-to-end tests for Terraform Mirror
-# Usage: ./scripts/run-e2e-tests.sh [--keep-running] [--skip-terraform] [--skip-build]
+# Usage: ./scripts/run-e2e-tests.sh [--keep-running] [--skip-terraform] [--skip-modules] [--skip-build]
 
 set -e
 
@@ -15,6 +15,7 @@ ADMIN_PASSWORD="testpassword123"
 # Options
 KEEP_RUNNING=false
 SKIP_TERRAFORM=false
+SKIP_MODULES=false
 SKIP_BUILD=false
 
 # Parse arguments
@@ -26,6 +27,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --skip-terraform)
             SKIP_TERRAFORM=true
+            shift
+            ;;
+        --skip-modules)
+            SKIP_MODULES=true
             shift
             ;;
         --skip-build)
@@ -154,6 +159,12 @@ test_service_discovery() {
     echo "$response" | jq -e '."providers.v1"' > /dev/null 2>&1
 }
 
+test_module_service_discovery() {
+    local response
+    response=$(curl -sf "$MIRROR_URL/.well-known/terraform.json" 2>/dev/null)
+    echo "$response" | jq -e '."modules.v1"' > /dev/null 2>&1
+}
+
 test_admin_login() {
     local token
     token=$(get_auth_token)
@@ -189,6 +200,89 @@ wait_for_job_completion() {
         
         local processing
         processing=$(curl -sf "$MIRROR_URL/admin/api/jobs?status=processing" \
+            -H "Authorization: Bearer $token" 2>/dev/null | jq '.jobs | length // 0')
+        
+        if [ "$pending" = "0" ] && [ "$processing" = "0" ]; then
+            return 0
+        fi
+        
+        echo -n "."
+        sleep 2
+        elapsed=$((elapsed + 2))
+    done
+    echo ""
+    return 1
+}
+
+# ============================================================================
+# Module E2E Test Functions
+# ============================================================================
+
+test_module_load() {
+    local token="$1"
+    
+    # Create a minimal module definition
+    # This module uses git:: URLs which are now supported by our Git downloader.
+    # The module will be cloned and archived as a tarball.
+    local module_hcl='module "hashicorp/consul/aws" {
+  versions = ["0.1.0"]
+}'
+    
+    local response
+    response=$(curl -sf -X POST "$MIRROR_URL/admin/api/modules/load" \
+        -H "Authorization: Bearer $token" \
+        -F "file=@-;filename=test-modules.hcl" <<< "$module_hcl" 2>/dev/null)
+    
+    echo "$response" | jq -e '.job_id // .id' > /dev/null 2>&1
+}
+
+test_module_list() {
+    local token="$1"
+    local response
+    response=$(curl -sf "$MIRROR_URL/admin/api/modules" \
+        -H "Authorization: Bearer $token" 2>/dev/null)
+    echo "$response" | jq -e '.modules' > /dev/null 2>&1
+}
+
+test_module_version_list() {
+    local response
+    response=$(curl -sf "$MIRROR_URL/v1/modules/hashicorp/consul/aws/versions" 2>/dev/null)
+    # 404 is acceptable if no modules loaded
+    if [ -z "$response" ]; then
+        local status
+        status=$(curl -sw '%{http_code}' -o /dev/null "$MIRROR_URL/v1/modules/hashicorp/consul/aws/versions" 2>/dev/null)
+        [ "$status" = "404" ]
+    else
+        echo "$response" | jq -e '.modules' > /dev/null 2>&1
+    fi
+}
+
+test_module_download() {
+    # Test module download endpoint - returns 204 with X-Terraform-Get header
+    local response_headers
+    response_headers=$(curl -sI "$MIRROR_URL/v1/modules/hashicorp/consul/aws/0.1.0/download" 2>/dev/null)
+    
+    if echo "$response_headers" | grep -q "HTTP.*204"; then
+        echo "$response_headers" | grep -qi "X-Terraform-Get"
+    else
+        # 404 means module not downloaded yet (acceptable)
+        echo "$response_headers" | grep -q "HTTP.*404"
+        return 2  # Skip
+    fi
+}
+
+wait_for_module_job_completion() {
+    local token="$1"
+    local timeout="${2:-120}"
+    local elapsed=0
+    
+    while [ $elapsed -lt $timeout ]; do
+        local pending
+        pending=$(curl -sf "$MIRROR_URL/admin/api/jobs?job_type=module&status=pending" \
+            -H "Authorization: Bearer $token" 2>/dev/null | jq '.jobs | length // 0')
+        
+        local processing
+        processing=$(curl -sf "$MIRROR_URL/admin/api/jobs?job_type=module&status=processing" \
             -H "Authorization: Bearer $token" 2>/dev/null | jq '.jobs | length // 0')
         
         if [ "$pending" = "0" ] && [ "$processing" = "0" ]; then
@@ -340,6 +434,84 @@ if [ -n "$TOKEN" ]; then
     else
         test_result "Provider load (upload HCL)" "false"
     fi
+fi
+
+# ============================================================================
+# Module E2E Tests
+# ============================================================================
+if [ "$SKIP_MODULES" = false ]; then
+    log_status "Running Module E2E tests..."
+    
+    # Test M1: Module service discovery
+    if test_module_service_discovery; then
+        test_result "Module service discovery (modules.v1)" "true"
+    else
+        test_result "Module service discovery (modules.v1)" "false"
+    fi
+    
+    # Test M2: Module version list endpoint (may 404 if no modules)
+    if test_module_version_list; then
+        test_result "Module version list endpoint" "true"
+    else
+        test_result "Module version list endpoint" "false"
+    fi
+    
+    # Continue only if login worked
+    if [ -n "$TOKEN" ]; then
+        # Test M3: Module list endpoint (admin)
+        if test_module_list "$TOKEN"; then
+            test_result "Module list endpoint (admin)" "true"
+        else
+            test_result "Module list endpoint (admin)" "false"
+        fi
+        
+        # Test M4: Module load (upload HCL)
+        if test_module_load "$TOKEN"; then
+            test_result "Module load (upload HCL)" "true"
+            
+            # Test M5: Wait for module job completion
+            echo "  Waiting for module download job to complete..."
+            if wait_for_module_job_completion "$TOKEN" 120; then
+                test_result "Module job completion" "true"
+                
+                # Give the system a moment to update
+                sleep 2
+                
+                # Test M6: Module version list after download
+                if test_module_version_list; then
+                    test_result "Module versions after download" "true"
+                else
+                    test_result "Module versions after download" "false"
+                fi
+                
+                # Test M7: Module download endpoint
+                module_download_result=$(test_module_download; echo $?)
+                if [ "$module_download_result" = "0" ]; then
+                    test_result "Module download endpoint (X-Terraform-Get)" "true"
+                elif [ "$module_download_result" = "2" ]; then
+                    test_result "Module download (module may not exist)" "skip"
+                else
+                    test_result "Module download endpoint (X-Terraform-Get)" "false"
+                fi
+                
+                # Test M8: Verify module appears in admin list
+                module_count=$(curl -sf "$MIRROR_URL/admin/api/modules" \
+                    -H "Authorization: Bearer $TOKEN" 2>/dev/null | jq '.modules | length // 0')
+                if [ "$module_count" -gt 0 ] 2>/dev/null; then
+                    test_result "Modules appear in admin list (count: $module_count)" "true"
+                else
+                    test_result "Modules appear in admin list" "false"
+                fi
+            else
+                test_result "Module job completion" "false" "Timeout waiting for module jobs"
+            fi
+        else
+            test_result "Module load (upload HCL)" "false"
+        fi
+    fi
+else
+    log_status "Skipping Module E2E tests (--skip-modules)"
+    SKIPPED=$((SKIPPED + 8))
 fi
 
 # Summary

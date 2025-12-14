@@ -20,12 +20,13 @@ func NewJobRepository(db *DB) *JobRepository {
 // Create creates a new download job
 func (r *JobRepository) Create(ctx context.Context, job *DownloadJob) error {
 	query := `
-		INSERT INTO download_jobs (user_id, source_type, source_data, status, total_items, completed_items, failed_items, started_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO download_jobs (user_id, job_type, source_type, source_data, status, total_items, completed_items, failed_items, started_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	result, err := r.db.conn.ExecContext(ctx, query,
 		job.UserID,
+		job.JobType,
 		job.SourceType,
 		job.SourceData,
 		job.Status,
@@ -51,7 +52,7 @@ func (r *JobRepository) Create(ctx context.Context, job *DownloadJob) error {
 // GetByID retrieves a job by ID
 func (r *JobRepository) GetByID(ctx context.Context, id int64) (*DownloadJob, error) {
 	query := `
-		SELECT id, user_id, source_type, source_data, status, progress, total_items, 
+		SELECT id, user_id, job_type, source_type, source_data, status, progress, total_items, 
 		       completed_items, failed_items, error_message, created_at, started_at, completed_at
 		FROM download_jobs
 		WHERE id = ?
@@ -61,6 +62,7 @@ func (r *JobRepository) GetByID(ctx context.Context, id int64) (*DownloadJob, er
 	err := r.db.conn.QueryRowContext(ctx, query, id).Scan(
 		&job.ID,
 		&job.UserID,
+		&job.JobType,
 		&job.SourceType,
 		&job.SourceData,
 		&job.Status,
@@ -86,7 +88,7 @@ func (r *JobRepository) GetByID(ctx context.Context, id int64) (*DownloadJob, er
 // List retrieves all jobs ordered by creation time
 func (r *JobRepository) List(ctx context.Context, limit, offset int) ([]*DownloadJob, error) {
 	query := `
-		SELECT id, user_id, source_type, source_data, status, progress, total_items, 
+		SELECT id, user_id, job_type, source_type, source_data, status, progress, total_items, 
 		       completed_items, failed_items, error_message, created_at, started_at, completed_at
 		FROM download_jobs
 		ORDER BY created_at DESC
@@ -105,6 +107,7 @@ func (r *JobRepository) List(ctx context.Context, limit, offset int) ([]*Downloa
 		if err := rows.Scan(
 			&job.ID,
 			&job.UserID,
+			&job.JobType,
 			&job.SourceType,
 			&job.SourceData,
 			&job.Status,
@@ -128,7 +131,7 @@ func (r *JobRepository) List(ctx context.Context, limit, offset int) ([]*Downloa
 // ListByStatus retrieves jobs with a specific status
 func (r *JobRepository) ListByStatus(ctx context.Context, status string, limit, offset int) ([]*DownloadJob, error) {
 	query := `
-		SELECT id, user_id, source_type, source_data, status, progress, total_items, 
+		SELECT id, user_id, job_type, source_type, source_data, status, progress, total_items, 
 		       completed_items, failed_items, error_message, created_at, started_at, completed_at
 		FROM download_jobs
 		WHERE status = ?
@@ -148,6 +151,7 @@ func (r *JobRepository) ListByStatus(ctx context.Context, status string, limit, 
 		if err := rows.Scan(
 			&job.ID,
 			&job.UserID,
+			&job.JobType,
 			&job.SourceType,
 			&job.SourceData,
 			&job.Status,
@@ -171,7 +175,7 @@ func (r *JobRepository) ListByStatus(ctx context.Context, status string, limit, 
 // ListPending retrieves pending jobs ordered by creation time
 func (r *JobRepository) ListPending(ctx context.Context, limit int) ([]*DownloadJob, error) {
 	query := `
-		SELECT id, user_id, source_type, source_data, status, progress, total_items, 
+		SELECT id, user_id, job_type, source_type, source_data, status, progress, total_items, 
 		       completed_items, failed_items, error_message, created_at, started_at, completed_at
 		FROM download_jobs
 		WHERE status = 'pending'
@@ -191,6 +195,7 @@ func (r *JobRepository) ListPending(ctx context.Context, limit int) ([]*Download
 		if err := rows.Scan(
 			&job.ID,
 			&job.UserID,
+			&job.JobType,
 			&job.SourceType,
 			&job.SourceData,
 			&job.Status,

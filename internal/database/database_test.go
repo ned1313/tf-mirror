@@ -68,7 +68,7 @@ func TestMigrations(t *testing.T) {
 	var version int
 	err = db.conn.QueryRow("SELECT MAX(version) FROM schema_migrations").Scan(&version)
 	require.NoError(t, err)
-	assert.Equal(t, 1, version)
+	assert.Equal(t, 2, version)
 
 	// Check that all expected tables exist
 	expectedTables := []string{
@@ -78,6 +78,8 @@ func TestMigrations(t *testing.T) {
 		"admin_actions",
 		"download_jobs",
 		"download_job_items",
+		"modules",
+		"module_job_items",
 	}
 
 	for _, table := range expectedTables {
@@ -102,17 +104,17 @@ func TestMigrationsIdempotent(t *testing.T) {
 	require.NoError(t, err)
 	defer db2.Close()
 
-	// Check version is still 1
+	// Check version is still 2
 	var version int
 	err = db2.conn.QueryRow("SELECT MAX(version) FROM schema_migrations").Scan(&version)
 	require.NoError(t, err)
-	assert.Equal(t, 1, version)
+	assert.Equal(t, 2, version)
 
 	// Check count of migration records
 	var count int
 	err = db2.conn.QueryRow("SELECT COUNT(*) FROM schema_migrations").Scan(&count)
 	require.NoError(t, err)
-	assert.Equal(t, 1, count)
+	assert.Equal(t, 2, count)
 }
 
 func TestWALMode(t *testing.T) {

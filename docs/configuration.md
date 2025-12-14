@@ -14,6 +14,7 @@ Terraform Mirror can be configured using HCL configuration files, environment va
 - [Logging Configuration](#logging-configuration)
 - [Telemetry Configuration](#telemetry-configuration)
 - [Provider Configuration](#provider-configuration)
+- [Module Configuration](#module-configuration)
 - [Quota Configuration](#quota-configuration)
 - [Feature Flags](#feature-flags)
 - [Complete Example](#complete-example)
@@ -426,6 +427,51 @@ providers {
 
 ---
 
+## Module Configuration
+
+Module download settings for the module registry mirror.
+
+### HCL Block
+
+```hcl
+modules {
+  upstream_registry            = "registry.terraform.io"
+  download_retry_attempts      = 3
+  download_timeout_seconds     = 300
+}
+```
+
+### Options
+
+| Option | Environment Variable | Type | Default | Description |
+|--------|---------------------|------|---------|-------------|
+| `upstream_registry` | `TFM_MODULES_UPSTREAM_REGISTRY` | string | `registry.terraform.io` | Upstream module registry |
+| `download_retry_attempts` | - | int | `3` | Maximum download retry attempts |
+| `download_timeout_seconds` | - | int | `300` | Download timeout (modules can be large) |
+
+### Module Sources
+
+The module mirror supports downloading modules from:
+
+- **Git URLs** (`git::https://...`) - Most common for public modules
+- **HTTP/HTTPS URLs** - Direct tarball downloads
+- **Terraform Registry** - Proxies to upstream registry
+
+### Example Module Definition
+
+```hcl
+# modules.hcl - Upload via Admin API
+module "hashicorp/consul/aws" {
+  versions = ["0.11.0", "0.10.0"]
+}
+
+module "hashicorp/vpc/aws" {
+  versions = ["5.0.0", "4.0.0", "3.0.0"]
+}
+```
+
+---
+
 ## Quota Configuration
 
 Storage quota and limits.
@@ -468,9 +514,22 @@ features {
 
 | Option | Environment Variable | Type | Default | Description |
 |--------|---------------------|------|---------|-------------|
-| `auto_download_providers` | `TFM_FEATURES_AUTO_DOWNLOAD_PROVIDERS` | bool | `false` | Auto-download providers on demand (Phase 2) |
-| `auto_download_modules` | `TFM_FEATURES_AUTO_DOWNLOAD_MODULES` | bool | `false` | Auto-download modules on demand (Phase 3) |
+| `auto_download_providers` | `TFM_FEATURES_AUTO_DOWNLOAD_PROVIDERS` | bool | `false` | Auto-download providers on first request |
+| `auto_download_modules` | `TFM_FEATURES_AUTO_DOWNLOAD_MODULES` | bool | `false` | Auto-download modules on first request |
 | `max_download_size_mb` | - | int | `500` | Maximum single file download size |
+
+### Auto-Download Behavior
+
+When enabled, auto-download features will:
+
+1. **Providers**: When a Terraform client requests a provider version that isn't cached, the mirror will fetch it from the upstream registry (registry.terraform.io) and cache it before responding.
+
+2. **Modules**: When a Terraform client requests a module version that isn't cached, the mirror will:
+   - Query the upstream registry for the download URL
+   - Clone Git repositories or download HTTP tarballs
+   - Cache the module tarball before responding
+
+**Note:** Auto-download adds latency to the first request for uncached resources. For air-gapped environments, pre-load all required providers and modules using the Admin API.
 
 ---
 
@@ -538,10 +597,21 @@ providers {
   download_timeout_seconds = 120
 }
 
+modules {
+  upstream_registry        = "registry.terraform.io"
+  download_retry_attempts  = 3
+  download_timeout_seconds = 300
+}
+
 quota {
   enabled                   = true
   max_storage_gb            = 500
   warning_threshold_percent = 80
+}
+
+features {
+  auto_download_providers = false
+  auto_download_modules   = false
 }
 ```
 

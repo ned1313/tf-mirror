@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -145,13 +146,22 @@ func (db *DB) migrate() error {
 
 	log.Printf("Current schema version: %d", currentVersion)
 
-	// Apply migrations
+	// Apply migrations in order
 	migrations := getMigrations()
-	for version, migration := range migrations {
+
+	// Get sorted migration versions
+	versions := make([]int, 0, len(migrations))
+	for version := range migrations {
+		versions = append(versions, version)
+	}
+	sort.Ints(versions)
+
+	for _, version := range versions {
 		if version <= currentVersion {
 			continue
 		}
 
+		migration := migrations[version]
 		log.Printf("Applying migration %d...", version)
 
 		tx, err := db.conn.Begin()
@@ -185,6 +195,7 @@ func (db *DB) migrate() error {
 func getMigrations() map[int]string {
 	return map[int]string{
 		1: migration001Initial,
+		2: migration002Modules,
 	}
 }
 
@@ -374,4 +385,76 @@ CREATE TABLE download_job_items (
 CREATE INDEX idx_download_job_items_job ON download_job_items(job_id);
 CREATE INDEX idx_download_job_items_status ON download_job_items(status);
 CREATE INDEX idx_download_job_items_provider ON download_job_items(namespace, type, version, platform);
+`
+
+// migration002Modules adds module tables for Phase 3
+const migration002Modules = `
+-- Modules table
+CREATE TABLE modules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    namespace TEXT NOT NULL,
+    name TEXT NOT NULL,
+    system TEXT NOT NULL,
+    version TEXT NOT NULL,
+    
+    -- Storage information
+    s3_key TEXT NOT NULL,
+    filename TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL DEFAULT 0,
+    
+    -- Original source tracking
+    original_source_url TEXT,
+    
+    -- Status flags
+    deprecated BOOLEAN NOT NULL DEFAULT 0,
+    blocked BOOLEAN NOT NULL DEFAULT 0,
+    
+    -- Timestamps
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    
+    -- Unique constraint on module identity
+    UNIQUE(namespace, name, system, version)
+);
+
+CREATE INDEX idx_modules_lookup ON modules(namespace, name, system);
+CREATE INDEX idx_modules_deprecated ON modules(deprecated);
+CREATE INDEX idx_modules_blocked ON modules(blocked);
+CREATE INDEX idx_modules_created ON modules(created_at DESC);
+
+-- Module job items table
+CREATE TABLE module_job_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id INTEGER NOT NULL,
+    
+    -- Module identity
+    namespace TEXT NOT NULL,
+    name TEXT NOT NULL,
+    system TEXT NOT NULL,
+    version TEXT NOT NULL,
+    
+    -- Item status
+    status TEXT NOT NULL DEFAULT 'pending', -- pending, downloading, completed, failed
+    
+    -- Results
+    module_id INTEGER,
+    error_message TEXT,
+    
+    -- Retry tracking
+    retry_count INTEGER NOT NULL DEFAULT 0,
+    
+    -- Timestamps
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    completed_at DATETIME,
+    
+    FOREIGN KEY (job_id) REFERENCES download_jobs(id) ON DELETE CASCADE,
+    FOREIGN KEY (module_id) REFERENCES modules(id) ON DELETE SET NULL
+);
+
+CREATE INDEX idx_module_job_items_job ON module_job_items(job_id);
+CREATE INDEX idx_module_job_items_status ON module_job_items(status);
+CREATE INDEX idx_module_job_items_module ON module_job_items(namespace, name, system, version);
+
+-- Add job_type column to download_jobs to distinguish provider vs module jobs
+ALTER TABLE download_jobs ADD COLUMN job_type TEXT NOT NULL DEFAULT 'provider';
 `
