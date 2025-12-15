@@ -31,6 +31,9 @@
           <span class="text-gray-500">Providers:</span> {{ stats.providers }}
         </div>
         <div class="text-gray-300">
+          <span class="text-gray-500">Modules:</span> {{ stats.modules }}
+        </div>
+        <div class="text-gray-300 col-span-2">
           <span class="text-gray-500">Storage:</span> {{ stats.storage }}
         </div>
       </div>
@@ -41,10 +44,11 @@
 <script setup lang="ts">
 import { computed, onMounted, h } from 'vue'
 import { useRoute } from 'vue-router'
-import { useStatsStore } from '@/stores'
+import { useStatsStore, useModulesStore } from '@/stores'
 
 const route = useRoute()
 const statsStore = useStatsStore()
+const modulesStore = useModulesStore()
 
 // Icon components (using simple SVG inline)
 const DashboardIcon = {
@@ -68,6 +72,19 @@ const ProvidersIcon = {
         'stroke-linejoin': 'round', 
         'stroke-width': '2',
         d: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4'
+      })
+    ])
+  }
+}
+
+const ModulesIcon = {
+  render() {
+    return h('svg', { fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor' }, [
+      h('path', { 
+        'stroke-linecap': 'round', 
+        'stroke-linejoin': 'round', 
+        'stroke-width': '2',
+        d: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10'
       })
     ])
   }
@@ -121,6 +138,7 @@ const SettingsIcon = {
 const navigation = [
   { name: 'Dashboard', to: '/admin', icon: DashboardIcon },
   { name: 'Providers', to: '/admin/providers', icon: ProvidersIcon },
+  { name: 'Modules', to: '/admin/modules', icon: ModulesIcon },
   { name: 'Jobs', to: '/admin/jobs', icon: JobsIcon },
   { name: 'Audit Logs', to: '/admin/audit', icon: AuditIcon },
   { name: 'Settings', to: '/admin/settings', icon: SettingsIcon },
@@ -128,6 +146,7 @@ const navigation = [
 
 const stats = computed(() => ({
   providers: statsStore.storageStats?.total_providers ?? '-',
+  modules: modulesStore.aggregatedModules.length || '-',
   storage: statsStore.storageStats?.total_size_human ?? '-'
 }))
 
@@ -140,5 +159,6 @@ function isActive(path: string): boolean {
 
 onMounted(() => {
   statsStore.fetchStorageStats()
+  modulesStore.fetchModules()
 })
 </script>

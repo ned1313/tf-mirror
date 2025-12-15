@@ -202,3 +202,52 @@ export interface AggregatedProvider {
   created_at: string
   updated_at: string
 }
+
+// Module types - matching backend ModuleResponse
+export interface Module {
+  id: number
+  namespace: string
+  name: string
+  system: string
+  version: string
+  s3_key: string
+  filename: string
+  size_bytes: number
+  original_source_url?: string
+  deprecated: boolean
+  blocked: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface ModuleListResponse {
+  modules: Module[]
+  total: number
+  page: number
+  page_size: number
+  total_pages: number
+}
+
+export interface UpdateModuleRequest {
+  deprecated?: boolean
+  blocked?: boolean
+}
+
+export interface LoadModulesResponse {
+  job_id: number
+  message: string
+  total_modules: number
+}
+
+// Aggregated module for UI display (grouped by namespace/name/system)
+export interface AggregatedModule {
+  id: string // namespace/name/system as unique ID
+  namespace: string
+  name: string
+  system: string
+  versions: string[]
+  deprecated: boolean
+  blocked: boolean
+  created_at: string
+  updated_at: string
+}
