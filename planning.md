@@ -99,8 +99,8 @@ Admins will require authentication. We'll use a simple username/password login. 
 - [x] Auto-download providers on demand ✅
 - [x] Auto-download modules on demand ✅
 - [x] Docker containerization ✅
+- [x] Frontend updates for modules ✅
 - [ ] Production deployment configuration
-- [ ] Frontend updates for modules (Registry view with tabs)
 
 #### Medium Priority
 
@@ -108,6 +108,7 @@ Admins will require authentication. We'll use a simple username/password login. 
 - [ ] Rate limiting (per-consumer)
 - [x] Caching layer (memory + disk) ✅
 - [ ] Telemetry/observability enhancements
+- [ ] Improve test coverage to >80%
 
 #### Low Priority
 
