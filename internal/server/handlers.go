@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -650,6 +651,7 @@ func formatBytes(bytes int64) string {
 func (s *Server) handleStorageStats(w http.ResponseWriter, r *http.Request) {
 	stats, err := s.providerRepo.GetStorageStats(r.Context())
 	if err != nil {
+		log.Printf("Error getting storage stats: %v", err)
 		respondError(w, http.StatusInternalServerError, "database_error", "Failed to get storage stats")
 		return
 	}

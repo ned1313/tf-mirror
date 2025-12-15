@@ -38,11 +38,27 @@ type LoadResult struct {
 	Skipped   bool // Already exists
 }
 
+// ProgressCallback is called after each provider is processed
+type ProgressCallback func(result *LoadResult)
+
 // LoadFromDefinitions loads all providers specified in the definitions
 func (s *Service) LoadFromDefinitions(ctx context.Context, defs *ProviderDefinitions) ([]*LoadResult, error) {
+	return s.LoadFromDefinitionsWithProgress(ctx, defs, nil)
+}
+
+// LoadFromDefinitionsWithProgress loads all providers with a progress callback
+func (s *Service) LoadFromDefinitionsWithProgress(ctx context.Context, defs *ProviderDefinitions, onProgress ProgressCallback) ([]*LoadResult, error) {
 	results := make([]*LoadResult, 0, defs.CountItems())
 
 	providerRepo := database.NewProviderRepository(s.db)
+
+	// Helper to add result and call progress callback
+	addResult := func(result *LoadResult) {
+		results = append(results, result)
+		if onProgress != nil {
+			onProgress(result)
+		}
+	}
 
 	// Process each provider definition
 	for _, def := range defs.Providers {
@@ -58,7 +74,7 @@ func (s *Service) LoadFromDefinitions(ctx context.Context, defs *ProviderDefinit
 				// Split platform into OS and arch
 				parts := strings.SplitN(platform, "_", 2)
 				if len(parts) != 2 {
-					results = append(results, &LoadResult{
+					addResult(&LoadResult{
 						Namespace: def.Namespace,
 						Type:      def.Type,
 						Version:   version,
@@ -73,7 +89,7 @@ func (s *Service) LoadFromDefinitions(ctx context.Context, defs *ProviderDefinit
 				// Check if already exists
 				existing, err := providerRepo.GetByIdentity(ctx, def.Namespace, def.Type, version, platform)
 				if err != nil {
-					results = append(results, &LoadResult{
+					addResult(&LoadResult{
 						Namespace: def.Namespace,
 						Type:      def.Type,
 						Version:   version,
@@ -86,7 +102,7 @@ func (s *Service) LoadFromDefinitions(ctx context.Context, defs *ProviderDefinit
 
 				if existing != nil {
 					// Already exists, skip
-					results = append(results, &LoadResult{
+					addResult(&LoadResult{
 						Namespace: def.Namespace,
 						Type:      def.Type,
 						Version:   version,
@@ -100,7 +116,7 @@ func (s *Service) LoadFromDefinitions(ctx context.Context, defs *ProviderDefinit
 				// Download from registry
 				downloadResult := s.registry.DownloadProviderComplete(ctx, def.Namespace, def.Type, version, os, arch)
 				if downloadResult.Error != nil {
-					results = append(results, &LoadResult{
+					addResult(&LoadResult{
 						Namespace: def.Namespace,
 						Type:      def.Type,
 						Version:   version,
@@ -117,7 +133,7 @@ func (s *Service) LoadFromDefinitions(ctx context.Context, defs *ProviderDefinit
 				// Upload to S3
 				reader := bytes.NewReader(downloadResult.Data)
 				if err := s.storage.Upload(ctx, s3Key, reader, "application/zip", nil); err != nil {
-					results = append(results, &LoadResult{
+					addResult(&LoadResult{
 						Namespace: def.Namespace,
 						Type:      def.Type,
 						Version:   version,
@@ -144,7 +160,7 @@ func (s *Service) LoadFromDefinitions(ctx context.Context, defs *ProviderDefinit
 					// Try to clean up S3 upload
 					_ = s.storage.Delete(ctx, s3Key)
 
-					results = append(results, &LoadResult{
+					addResult(&LoadResult{
 						Namespace: def.Namespace,
 						Type:      def.Type,
 						Version:   version,
@@ -156,7 +172,7 @@ func (s *Service) LoadFromDefinitions(ctx context.Context, defs *ProviderDefinit
 				}
 
 				// Success!
-				results = append(results, &LoadResult{
+				addResult(&LoadResult{
 					Namespace: def.Namespace,
 					Type:      def.Type,
 					Version:   version,

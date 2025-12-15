@@ -56,8 +56,16 @@ type LoadResult struct {
 	Skipped   bool // Already exists
 }
 
+// ProgressCallback is called after each module is processed
+type ProgressCallback func(result *LoadResult)
+
 // LoadFromDefinitions loads all modules specified in the definitions
 func (s *Service) LoadFromDefinitions(ctx context.Context, defs *ModuleDefinitions) ([]*LoadResult, error) {
+	return s.LoadFromDefinitionsWithProgress(ctx, defs, nil)
+}
+
+// LoadFromDefinitionsWithProgress loads all modules with a progress callback
+func (s *Service) LoadFromDefinitionsWithProgress(ctx context.Context, defs *ModuleDefinitions, onProgress ProgressCallback) ([]*LoadResult, error) {
 	results := make([]*LoadResult, 0, defs.CountItems())
 
 	moduleRepo := database.NewModuleRepository(s.db)
@@ -73,6 +81,11 @@ func (s *Service) LoadFromDefinitions(ctx context.Context, defs *ModuleDefinitio
 
 			result := s.loadModuleVersion(ctx, moduleRepo, def, version)
 			results = append(results, result)
+
+			// Call progress callback if provided
+			if onProgress != nil {
+				onProgress(result)
+			}
 		}
 	}
 

@@ -10,6 +10,16 @@ const router = createRouter({
       component: Home
     },
     {
+      path: '/providers',
+      name: 'browse-providers',
+      component: () => import('../views/BrowseProviders.vue')
+    },
+    {
+      path: '/modules',
+      name: 'browse-modules',
+      component: () => import('../views/BrowseModules.vue')
+    },
+    {
       path: '/login',
       name: 'login',
       component: () => import('../views/Login.vue')
@@ -24,6 +34,12 @@ const router = createRouter({
       path: '/admin/providers',
       name: 'admin-providers',
       component: () => import('../views/Providers.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/admin/modules',
+      name: 'admin-modules',
+      component: () => import('../views/Modules.vue'),
       meta: { requiresAuth: true }
     },
     {
@@ -43,11 +59,6 @@ const router = createRouter({
       name: 'admin-settings',
       component: () => import('../views/Settings.vue'),
       meta: { requiresAuth: true }
-    },
-    // Redirect old providers route to admin providers
-    {
-      path: '/providers',
-      redirect: '/admin/providers'
     }
   ]
 })

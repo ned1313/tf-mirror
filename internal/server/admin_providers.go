@@ -1,10 +1,12 @@
 package server
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"time"
 
@@ -121,28 +123,44 @@ func (s *Server) handleLoadProviders(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Process providers synchronously for now (async worker will come in Step 12)
+	// Log the job creation
+	s.logAuditEvent(r, "load_providers", "job", fmt.Sprintf("%d", job.ID), true, "", map[string]interface{}{
+		"total_providers": len(defs.Providers),
+		"total_items":     totalItems,
+	})
+
+	// Return response immediately - job will be processed in the background
+	response := LoadProvidersResponse{
+		JobID:   job.ID,
+		Message: fmt.Sprintf("Provider loading job created: %d providers (%d items)", len(defs.Providers), totalItems),
+		Total:   len(defs.Providers),
+	}
+
+	// Start async processing in a goroutine
+	go s.processProviderLoadJob(job, defs)
+
+	// Return success response immediately
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted) // 202 Accepted - job is queued
+	json.NewEncoder(w).Encode(response)
+}
+
+// processProviderLoadJob handles provider loading in the background
+func (s *Server) processProviderLoadJob(job *database.DownloadJob, defs *provider.ProviderDefinitions) {
+	bgCtx := context.Background()
+
+	log.Printf("Starting provider load job %d with %d items", job.ID, job.TotalItems)
+
 	// Create provider service
 	providerSvc := provider.NewService(s.storage, s.db)
 
-	// Load providers
-	results, err := providerSvc.LoadFromDefinitions(r.Context(), defs)
-	if err != nil {
-		// Update job status to failed
-		job.Status = "failed"
-		job.ErrorMessage = sql.NullString{String: err.Error(), Valid: true}
-		job.CompletedAt = sql.NullTime{Time: time.Now(), Valid: true}
-		s.jobRepo.Update(r.Context(), job)
+	// Track progress during processing
+	var completedCount, failedCount int
 
-		respondError(w, http.StatusInternalServerError, "load_error",
-			fmt.Sprintf("Failed to load providers: %v", err))
-		return
-	}
-
-	// Update job items based on results
-	items, err := s.jobRepo.GetItems(r.Context(), job.ID)
-	if err == nil {
-		for _, result := range results {
+	results, err := providerSvc.LoadFromDefinitionsWithProgress(bgCtx, defs, func(result *provider.LoadResult) {
+		// Update job item status
+		items, listErr := s.jobRepo.GetItems(bgCtx, job.ID)
+		if listErr == nil {
 			for _, item := range items {
 				if item.Namespace == result.Namespace &&
 					item.Type == result.Type &&
@@ -150,18 +168,39 @@ func (s *Server) handleLoadProviders(w http.ResponseWriter, r *http.Request) {
 					item.Platform == result.Platform {
 					if result.Success {
 						item.Status = "completed"
-						// Provider ID is not stored in LoadResult, so we skip it
+						completedCount++
 					} else if result.Error != nil {
 						item.Status = "failed"
 						item.ErrorMessage = sql.NullString{String: result.Error.Error(), Valid: true}
+						failedCount++
 					}
-					s.jobRepo.UpdateItem(r.Context(), item)
+					s.jobRepo.UpdateItem(bgCtx, item)
+					break
 				}
 			}
 		}
+
+		// Update job progress
+		totalProcessed := completedCount + failedCount
+		if job.TotalItems > 0 {
+			job.Progress = (totalProcessed * 100) / job.TotalItems
+		}
+		job.CompletedItems = completedCount
+		job.FailedItems = failedCount
+		s.jobRepo.Update(bgCtx, job)
+	})
+
+	if err != nil {
+		// Update job status to failed
+		job.Status = "failed"
+		job.ErrorMessage = sql.NullString{String: err.Error(), Valid: true}
+		job.CompletedAt = sql.NullTime{Time: time.Now(), Valid: true}
+		s.jobRepo.Update(bgCtx, job)
+		log.Printf("Provider load job %d failed: %v", job.ID, err)
+		return
 	}
 
-	// Calculate final statistics
+	// Calculate final statistics (progress was updated incrementally)
 	stats := provider.CalculateStats(results)
 	job.CompletedItems = stats.Success
 	job.FailedItems = stats.Failed
@@ -169,30 +208,10 @@ func (s *Server) handleLoadProviders(w http.ResponseWriter, r *http.Request) {
 	job.Status = "completed"
 	job.CompletedAt = sql.NullTime{Time: time.Now(), Valid: true}
 
-	if err := s.jobRepo.Update(r.Context(), job); err != nil {
-		respondError(w, http.StatusInternalServerError, "job_finalize_error",
-			fmt.Sprintf("Failed to finalize job: %v", err))
+	if err := s.jobRepo.Update(bgCtx, job); err != nil {
+		log.Printf("Failed to finalize job %d: %v", job.ID, err)
 		return
 	}
 
-	// Prepare response with job ID
-	response := LoadProvidersResponse{
-		JobID: job.ID,
-		Message: fmt.Sprintf("Provider loading job created and completed: %d total providers",
-			len(defs.Providers)),
-		Total: len(defs.Providers),
-	}
-
-	// Log successful provider load
-	s.logAuditEvent(r, "load_providers", "job", fmt.Sprintf("%d", job.ID), true, "", map[string]interface{}{
-		"total_providers": len(defs.Providers),
-		"total_items":     totalItems,
-		"success":         stats.Success,
-		"failed":          stats.Failed,
-	})
-
-	// Return success response
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response)
+	log.Printf("Provider load job %d completed: %d success, %d failed", job.ID, stats.Success, stats.Failed)
 }

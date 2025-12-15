@@ -8,6 +8,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -19,8 +20,10 @@ import (
 )
 
 func setupAdminTest(t *testing.T) (*Server, func()) {
-	// Create test database
-	db, err := database.New(":memory:")
+	// Create test database with unique name per test to avoid shared cache issues
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "test.db")
+	db, err := database.New(dbPath)
 	require.NoError(t, err)
 
 	// Create test storage
@@ -137,9 +140,8 @@ provider "hashicorp/random" {
 
 	server.router.ServeHTTP(rr, req)
 
-	// Note: This will likely fail because we can't actually download from registry in tests
-	// But we can check that the endpoint is wired up correctly
-	assert.Equal(t, http.StatusOK, rr.Code, "Expected status 200, got response: %s", rr.Body.String())
+	// Async processing returns 202 Accepted
+	assert.Equal(t, http.StatusAccepted, rr.Code, "Expected status 202, got response: %s", rr.Body.String())
 
 	var response LoadProvidersResponse
 	err := json.NewDecoder(rr.Body).Decode(&response)

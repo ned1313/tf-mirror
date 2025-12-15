@@ -1,10 +1,12 @@
 package server
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -134,7 +136,13 @@ func (s *Server) handleLoadModules(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Update job status to running and set start time
+	// Log the job creation
+	s.logAuditEvent(r, "load_modules", "job", fmt.Sprintf("%d", job.ID), true, "", map[string]interface{}{
+		"total_modules": len(defs.Modules),
+		"total_items":   totalItems,
+	})
+
+	// Update job to running before returning (so UI shows correct status immediately)
 	job.Status = "running"
 	job.StartedAt = sql.NullTime{Time: time.Now(), Valid: true}
 	if err := s.jobRepo.Update(r.Context(), job); err != nil {
@@ -143,7 +151,29 @@ func (s *Server) handleLoadModules(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Process modules synchronously
+	// Return response immediately - job will be processed in the background
+	response := LoadModulesResponse{
+		JobID:   job.ID,
+		Message: fmt.Sprintf("Module loading job created: %d modules (%d versions)", len(defs.Modules), totalItems),
+		Total:   len(defs.Modules),
+	}
+
+	// Start async processing in a goroutine
+	go s.processModuleLoadJob(job, defs, moduleJobRepo)
+
+	// Return success response immediately
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted) // 202 Accepted - job is queued
+	json.NewEncoder(w).Encode(response)
+}
+
+// processModuleLoadJob handles module loading in the background
+func (s *Server) processModuleLoadJob(job *database.DownloadJob, defs *module.ModuleDefinitions, moduleJobRepo *database.ModuleJobRepository) {
+	bgCtx := context.Background()
+
+	log.Printf("Starting module load job %d with %d items", job.ID, job.TotalItems)
+
+	// Process modules with progress callback
 	moduleSvc := module.NewServiceWithRegistry(
 		s.storage,
 		s.db,
@@ -151,24 +181,13 @@ func (s *Server) handleLoadModules(w http.ResponseWriter, r *http.Request) {
 		s.config.Modules.MirrorHostname,
 	)
 
-	// Load modules
-	results, err := moduleSvc.LoadFromDefinitions(r.Context(), defs)
-	if err != nil {
-		// Update job status to failed
-		job.Status = "failed"
-		job.ErrorMessage = sql.NullString{String: err.Error(), Valid: true}
-		job.CompletedAt = sql.NullTime{Time: time.Now(), Valid: true}
-		s.jobRepo.Update(r.Context(), job)
+	// Track progress during processing
+	var completedCount, failedCount int
 
-		respondError(w, http.StatusInternalServerError, "load_error",
-			fmt.Sprintf("Failed to load modules: %v", err))
-		return
-	}
-
-	// Update job items based on results
-	items, err := moduleJobRepo.ListByJob(r.Context(), job.ID)
-	if err == nil {
-		for _, result := range results {
+	results, err := moduleSvc.LoadFromDefinitionsWithProgress(bgCtx, defs, func(result *module.LoadResult) {
+		// Update job item status
+		items, listErr := moduleJobRepo.ListByJob(bgCtx, job.ID)
+		if listErr == nil {
 			for _, item := range items {
 				if item.Namespace == result.Namespace &&
 					item.Name == result.Name &&
@@ -176,17 +195,38 @@ func (s *Server) handleLoadModules(w http.ResponseWriter, r *http.Request) {
 					item.Version == result.Version {
 					if result.Success {
 						item.Status = "completed"
+						completedCount++
 					} else if result.Error != nil {
 						item.Status = "failed"
 						item.ErrorMessage = sql.NullString{String: result.Error.Error(), Valid: true}
+						failedCount++
 					}
-					moduleJobRepo.UpdateItem(r.Context(), item)
+					moduleJobRepo.UpdateItem(bgCtx, item)
+					break
 				}
 			}
 		}
+
+		// Update job progress
+		totalProcessed := completedCount + failedCount
+		if job.TotalItems > 0 {
+			job.Progress = (totalProcessed * 100) / job.TotalItems
+		}
+		job.CompletedItems = completedCount
+		job.FailedItems = failedCount
+		s.jobRepo.Update(bgCtx, job)
+	})
+	if err != nil {
+		// Update job status to failed
+		job.Status = "failed"
+		job.ErrorMessage = sql.NullString{String: err.Error(), Valid: true}
+		job.CompletedAt = sql.NullTime{Time: time.Now(), Valid: true}
+		s.jobRepo.Update(bgCtx, job)
+		log.Printf("Module load job %d failed: %v", job.ID, err)
+		return
 	}
 
-	// Calculate final statistics
+	// Calculate final statistics (progress was updated incrementally)
 	stats := module.CalculateStats(results)
 	job.CompletedItems = stats.Success
 	job.FailedItems = stats.Failed
@@ -194,32 +234,12 @@ func (s *Server) handleLoadModules(w http.ResponseWriter, r *http.Request) {
 	job.Status = "completed"
 	job.CompletedAt = sql.NullTime{Time: time.Now(), Valid: true}
 
-	if err := s.jobRepo.Update(r.Context(), job); err != nil {
-		respondError(w, http.StatusInternalServerError, "job_finalize_error",
-			fmt.Sprintf("Failed to finalize job: %v", err))
+	if err := s.jobRepo.Update(bgCtx, job); err != nil {
+		log.Printf("Failed to finalize job %d: %v", job.ID, err)
 		return
 	}
 
-	// Prepare response with job ID
-	response := LoadModulesResponse{
-		JobID: job.ID,
-		Message: fmt.Sprintf("Module loading job created and completed: %d total modules",
-			len(defs.Modules)),
-		Total: len(defs.Modules),
-	}
-
-	// Log successful module load
-	s.logAuditEvent(r, "load_modules", "job", fmt.Sprintf("%d", job.ID), true, "", map[string]interface{}{
-		"total_modules": len(defs.Modules),
-		"total_items":   totalItems,
-		"success":       stats.Success,
-		"failed":        stats.Failed,
-	})
-
-	// Return success response
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response)
+	log.Printf("Module load job %d completed: %d success, %d failed", job.ID, stats.Success, stats.Failed)
 }
 
 // handleListModules lists all modules with pagination

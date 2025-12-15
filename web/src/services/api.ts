@@ -14,7 +14,11 @@ import type {
   BackupResponse,
   ProcessorStatus,
   LoadProvidersResponse,
-  ApiError
+  ApiError,
+  Module,
+  ModuleListResponse,
+  UpdateModuleRequest,
+  LoadModulesResponse
 } from '@/types'
 
 // Create axios instance with base configuration
@@ -167,6 +171,45 @@ export const backupApi = {
 export const processorApi = {
   status: async (): Promise<ProcessorStatus> => {
     const response = await api.get<ProcessorStatus>('/processor/status')
+    return response.data
+  }
+}
+
+// Modules API
+export const modulesApi = {
+  list: async (params?: { 
+    namespace?: string
+    name?: string
+    system?: string
+    page?: number
+    page_size?: number
+  }): Promise<ModuleListResponse> => {
+    const response = await api.get<ModuleListResponse>('/modules', { params })
+    return response.data
+  },
+
+  get: async (id: number): Promise<Module> => {
+    const response = await api.get<Module>(`/modules/${id}`)
+    return response.data
+  },
+
+  update: async (id: number, data: UpdateModuleRequest): Promise<Module> => {
+    const response = await api.put<Module>(`/modules/${id}`, data)
+    return response.data
+  },
+
+  delete: async (id: number): Promise<void> => {
+    await api.delete(`/modules/${id}`)
+  },
+
+  load: async (file: File): Promise<LoadModulesResponse> => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const response = await api.post<LoadModulesResponse>('/modules/load', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    })
     return response.data
   }
 }
