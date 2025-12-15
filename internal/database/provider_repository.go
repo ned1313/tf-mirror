@@ -258,8 +258,8 @@ func (r *ProviderRepository) GetStorageStats(ctx context.Context) (*StorageStats
 			COUNT(DISTINCT namespace) as unique_namespaces,
 			COUNT(DISTINCT type) as unique_types,
 			COUNT(DISTINCT namespace || '/' || type || '/' || version) as unique_versions,
-			SUM(CASE WHEN deprecated = 1 THEN 1 ELSE 0 END) as deprecated_count,
-			SUM(CASE WHEN blocked = 1 THEN 1 ELSE 0 END) as blocked_count
+			COALESCE(SUM(CASE WHEN deprecated = 1 THEN 1 ELSE 0 END), 0) as deprecated_count,
+			COALESCE(SUM(CASE WHEN blocked = 1 THEN 1 ELSE 0 END), 0) as blocked_count
 		FROM providers
 	`
 
