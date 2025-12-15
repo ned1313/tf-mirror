@@ -86,9 +86,12 @@ Admins will require authentication. We'll use a simple username/password login. 
   - Login - Admin authentication
   - Admin (Dashboard) - Overview with stats, recent activity, active jobs
   - Providers - List, filter, update, delete providers
-  - Jobs - View job history, retry failed jobs
+  - Modules - List, filter, upload, delete modules
+  - Jobs - View job history, retry failed jobs, auto-refresh
   - AuditLogs - Search and filter audit entries
   - Settings - View configuration, trigger backups
+  - BrowseProviders - Public provider browsing (no auth required)
+  - BrowseModules - Public module browsing (no auth required)
 - ✅ Build passes with TypeScript checking
 
 ### Pending
@@ -100,6 +103,8 @@ Admins will require authentication. We'll use a simple username/password login. 
 - [x] Auto-download modules on demand ✅
 - [x] Docker containerization ✅
 - [x] Frontend updates for modules ✅
+- [x] Public browse pages for unauthenticated users ✅
+- [x] Async job processing with progress tracking ✅
 - [ ] Production deployment configuration
 
 #### Medium Priority

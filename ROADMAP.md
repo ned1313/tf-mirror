@@ -368,10 +368,30 @@ Phase 1 is complete when:
 - ✅ Router update with /admin/modules route
 - ✅ Sidebar navigation with Modules link
 - ✅ Sidebar stats to show module count
+- ✅ Public browse pages for unauthenticated users:
+  - ✅ BrowseProviders.vue - Browse cached providers by namespace
+  - ✅ BrowseModules.vue - Browse cached modules by namespace
+  - ✅ Public API endpoints (/api/public/providers, /api/public/modules)
+- ✅ Async job processing with real-time progress updates
+- ✅ Auto-refresh on Jobs page (2s/10s dynamic intervals)
+- ✅ Fixed job started_at tracking
+- ✅ SQLite busy_timeout for improved concurrency
+- ✅ Test isolation fixes for CI reliability
 
 **Completed: December 2025**
 
-### Phase 5: Advanced Features (Future Consideration)
+### Phase 5: Production Hardening (Planned)
+- [ ] Rate limiting per consumer IP/token
+- [ ] Improved test coverage (>80%)
+- [ ] GPG signature verification for providers
+- [ ] Telemetry/observability enhancements
+- [ ] Health check improvements with dependency status
+- [ ] Graceful degradation when storage unavailable
+- [ ] Connection pooling optimization
+- [ ] Request timeout configuration
+- [ ] Bulk operations API (delete multiple providers/modules)
+
+### Phase 6: Enterprise Features (Future Consideration)
 - Multi-region replication
 - High availability / clustering
 - Advanced caching strategies
@@ -379,10 +399,11 @@ Phase 1 is complete when:
 - Provider/module pre-warming based on usage patterns
 - SSO integration (OIDC/SAML)
 - Role-based access control (RBAC)
-- API rate limiting per consumer
-- Metrics and alerting (Prometheus/Grafana)
+- Multiple admin users
+- Metrics and alerting dashboards (Prometheus/Grafana)
 
 ---
 
-**Note**: This roadmap focuses on Phase 1. Phase 2 and Phase 3 will have their own detailed roadmaps once Phase 1 is complete and deployed.
-**Total: ~10 weeks for Phase 1 MVP**
+**Note**: Phases 1-4 are complete. The project is fully functional with provider and module mirroring capabilities. Phase 5 focuses on production hardening and stability improvements.
+
+**Total Development Time**: Phases 1-4 completed in ~12 weeks (October - December 2025)
