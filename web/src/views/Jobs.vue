@@ -296,7 +296,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import AdminLayout from '@/layouts/AdminLayout.vue'
 import { useJobsStore } from '@/stores'
 import type { Job } from '@/types'
@@ -308,6 +308,35 @@ const showDetailsModal = ref(false)
 const selectedJob = ref<Job | null>(null)
 const retrying = ref<number | null>(null)
 const cancelling = ref<number | null>(null)
+
+// Auto-refresh interval
+let refreshInterval: ReturnType<typeof setInterval> | null = null
+const REFRESH_INTERVAL_ACTIVE = 2000  // 2 seconds when jobs are running
+const REFRESH_INTERVAL_IDLE = 10000   // 10 seconds when no active jobs
+
+// Check if there are any active (running/pending) jobs
+const hasActiveJobs = computed(() => {
+  return jobsStore.jobs.some(j => j.status === 'running' || j.status === 'pending')
+})
+
+// Start/update the refresh interval based on active jobs
+function updateRefreshInterval() {
+  // Clear existing interval
+  if (refreshInterval) {
+    clearInterval(refreshInterval)
+  }
+  
+  // Set new interval based on whether there are active jobs
+  const interval = hasActiveJobs.value ? REFRESH_INTERVAL_ACTIVE : REFRESH_INTERVAL_IDLE
+  refreshInterval = setInterval(() => {
+    jobsStore.fetchJobs()
+  }, interval)
+}
+
+// Watch for changes in active jobs to adjust refresh rate
+watch(hasActiveJobs, () => {
+  updateRefreshInterval()
+})
 
 const tabs = computed(() => [
   { label: 'All', value: '', count: jobsStore.jobs.length },
@@ -392,5 +421,12 @@ async function handleCancel(job: Job) {
 
 onMounted(() => {
   jobsStore.fetchJobs()
+  updateRefreshInterval()
+})
+
+onUnmounted(() => {
+  if (refreshInterval) {
+    clearInterval(refreshInterval)
+  }
 })
 </script>

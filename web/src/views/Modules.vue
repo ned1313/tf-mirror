@@ -396,9 +396,12 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import AdminLayout from '@/layouts/AdminLayout.vue'
 import { useModulesStore } from '@/stores'
 import type { AggregatedModule } from '@/types'
+
+const router = useRouter()
 
 const modulesStore = useModulesStore()
 
@@ -531,8 +534,8 @@ async function handleUpload() {
     if (response) {
       showUploadModal.value = false
       selectedFile.value = null
-      // Refresh the module list
-      await modulesStore.fetchModules()
+      // Navigate to Jobs page to track the upload progress
+      router.push('/admin/jobs')
     }
   } finally {
     uploading.value = false

@@ -137,9 +137,8 @@ provider "hashicorp/random" {
 
 	server.router.ServeHTTP(rr, req)
 
-	// Note: This will likely fail because we can't actually download from registry in tests
-	// But we can check that the endpoint is wired up correctly
-	assert.Equal(t, http.StatusOK, rr.Code, "Expected status 200, got response: %s", rr.Body.String())
+	// Async processing returns 202 Accepted
+	assert.Equal(t, http.StatusAccepted, rr.Code, "Expected status 202, got response: %s", rr.Body.String())
 
 	var response LoadProvidersResponse
 	err := json.NewDecoder(rr.Body).Decode(&response)

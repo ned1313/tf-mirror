@@ -180,6 +180,13 @@ func (s *Server) setupRouter() {
 		r.Get("/metrics", s.handleMetrics)
 	}
 
+	// Public API endpoints (no authentication required)
+	// These are for browsing providers and modules without logging in
+	r.Route("/api/public", func(r chi.Router) {
+		r.Get("/providers", s.handlePublicListProviders)
+		r.Get("/modules", s.handlePublicListModules)
+	})
+
 	// Module Registry Protocol endpoints (public, no auth)
 	// Pattern: /v1/modules/{namespace}/{name}/{system}/versions
 	// Pattern: /v1/modules/{namespace}/{name}/{system}/{version}/download

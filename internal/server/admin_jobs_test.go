@@ -116,7 +116,8 @@ provider "hashicorp/random" {
 	rr := httptest.NewRecorder()
 	server.router.ServeHTTP(rr, req)
 
-	require.Equal(t, http.StatusOK, rr.Code, "Failed to create job: %s", rr.Body.String())
+	// Async processing returns 202 Accepted
+	require.Equal(t, http.StatusAccepted, rr.Code, "Job creation should return 202: %s", rr.Body.String())
 
 	var createResponse LoadProvidersResponse
 	err := json.NewDecoder(rr.Body).Decode(&createResponse)
@@ -138,8 +139,8 @@ provider "hashicorp/random" {
 
 	assert.Equal(t, createResponse.JobID, jobResp.ID)
 	assert.Equal(t, "hcl", jobResp.SourceType)
-	assert.Equal(t, "completed", jobResp.Status)
-	assert.Equal(t, 100, jobResp.Progress)
+	// Job is processed asynchronously, so it may be pending, running, or completed
+	assert.Contains(t, []string{"pending", "running", "completed"}, jobResp.Status)
 	assert.Greater(t, jobResp.TotalItems, 0)
 	assert.NotNil(t, jobResp.Items)
 	assert.Greater(t, len(jobResp.Items), 0)

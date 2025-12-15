@@ -221,7 +221,7 @@ func (r *JobRepository) Update(ctx context.Context, job *DownloadJob) error {
 	query := `
 		UPDATE download_jobs
 		SET status = ?, progress = ?, completed_items = ?, failed_items = ?, 
-		    error_message = ?, completed_at = ?
+		    error_message = ?, started_at = ?, completed_at = ?
 		WHERE id = ?
 	`
 
@@ -231,6 +231,7 @@ func (r *JobRepository) Update(ctx context.Context, job *DownloadJob) error {
 		job.CompletedItems,
 		job.FailedItems,
 		job.ErrorMessage,
+		job.StartedAt,
 		job.CompletedAt,
 		job.ID,
 	)

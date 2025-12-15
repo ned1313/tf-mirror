@@ -350,9 +350,12 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import AdminLayout from '@/layouts/AdminLayout.vue'
 import { useProvidersStore } from '@/stores'
 import type { Provider } from '@/types'
+
+const router = useRouter()
 
 const providersStore = useProvidersStore()
 
@@ -517,11 +520,13 @@ async function handleUpload() {
   
   uploading.value = true
   try {
-    await providersStore.loadProviders(selectedFile.value)
-    showUploadModal.value = false
-    selectedFile.value = null
-    // Refresh providers list
-    await providersStore.fetchProviders()
+    const response = await providersStore.loadProviders(selectedFile.value)
+    if (response) {
+      showUploadModal.value = false
+      selectedFile.value = null
+      // Navigate to Jobs page to track the upload progress
+      router.push('/admin/jobs')
+    }
   } finally {
     uploading.value = false
   }
