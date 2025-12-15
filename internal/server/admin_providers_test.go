@@ -8,6 +8,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -19,8 +20,10 @@ import (
 )
 
 func setupAdminTest(t *testing.T) (*Server, func()) {
-	// Create test database
-	db, err := database.New(":memory:")
+	// Create test database with unique name per test to avoid shared cache issues
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "test.db")
+	db, err := database.New(dbPath)
 	require.NoError(t, err)
 
 	// Create test storage
